@@ -413,7 +413,7 @@ function App() {
               exciting updates ahead.
             </p>
             <p style={{ fontSize: '26px', color: 'var(--pixel-text-dim)', margin: '0 0 20px 0' }}>
-              Stay tuned, and thanks for using Pixel Agents!
+              Stay tuned, and thanks for using Agent Office!
             </p>
             <button
               className="pixel-agents-migration-btn"

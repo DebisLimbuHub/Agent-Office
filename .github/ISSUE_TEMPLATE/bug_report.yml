@@ -1,5 +1,5 @@
 name: "Bug report"
-description: "Report a bug to help us improve Pixel Agents."
+description: "Report a bug to help us improve Agent Office."
 title: "[Bug]: "
 labels: ["type: bug"]
 body:
@@ -18,7 +18,7 @@ body:
       label: "Steps to reproduce"
       description: "List exact steps to reproduce the behavior."
       placeholder: |
-        1. Open Pixel Agents panel
+        1. Open Agent Office panel
         2. Click '+ Agent'
         3. ...
     validations:

@@ -8,7 +8,7 @@
 
 ## Reporting a Vulnerability
 
-Please report security vulnerabilities through [GitHub's private vulnerability reporting](https://github.com/pablodelucca/pixel-agents/security/advisories/new).
+Please report security vulnerabilities through [GitHub's private vulnerability reporting](https://github.com/DebisLimbuHub/Agent-Office/security/advisories/new).
 
 **Do not open a public issue for security vulnerabilities.**
 

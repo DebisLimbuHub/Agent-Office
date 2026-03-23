@@ -1,6 +1,6 @@
-# Contributing to Pixel Agents
+# Contributing to Agent Office
 
-Thanks for your interest in contributing to Pixel Agents! All contributions are welcome — features, bug fixes, documentation improvements, refactors, and more.
+Thanks for your interest in contributing to Agent Office! All contributions are welcome - features, bug fixes, documentation improvements, refactors, and more.
 
 This project is licensed under the [MIT License](LICENSE), so your contributions will be too. No CLA or DCO is required.
 
@@ -14,8 +14,8 @@ This project is licensed under the [MIT License](LICENSE), so your contributions
 ### Setup
 
 ```bash
-git clone https://github.com/pablodelucca/pixel-agents.git
-cd pixel-agents
+git clone https://github.com/DebisLimbuHub/Agent-Office.git
+cd Agent-Office
 npm install
 cd webview-ui && npm install && cd ..
 npm run build
@@ -35,9 +35,9 @@ This starts parallel watchers for both the extension backend (esbuild) and TypeS
 
 > **Note:** The webview (Vite) is not included in `watch` — after changing webview code, run `npm run build:webview` or the full `npm run build`.
 
-## Running the Mocked Pixel Agent
+## Running the Mocked Agent Office
 
-You can run the mocked Pixel Agent web app either from the CLI or from VS Code tasks.
+You can run the mocked Agent Office web app either from the CLI or from VS Code tasks.
 
 ### Option 1: CLI
 
@@ -53,7 +53,7 @@ Vite will print a local URL (typically `http://localhost:5173`) where the mocked
 ### Option 2: VS Code Run Task
 
 1. Open the command palette and run **Tasks: Run Task**.
-2. Select **Mocked Pixel Agent Dev Server**.
+2. Select **Mocked Agent Office Dev Server**.
 3. Open the local URL shown in the task terminal output (typically `http://localhost:5173`).
 
 ### Project Structure
@@ -115,11 +115,11 @@ These rules are set to `warn` — they won't block your PR but will flag violati
 
 ## Reporting Bugs
 
-[Open a bug report](https://github.com/pablodelucca/pixel-agents/issues/new?template=bug_report.yml) — the form will guide you through providing the details we need.
+[Open a bug report](https://github.com/DebisLimbuHub/Agent-Office/issues/new?template=bug_report.yml) - the form will guide you through providing the details we need.
 
 ## Feature Requests
 
-Have an idea? [Open a feature request](https://github.com/pablodelucca/pixel-agents/issues/new?template=feature_request.yml) — the form will guide you through describing the problem and your proposed solution. You can also browse and join ongoing conversations in [Discussions](https://github.com/pablodelucca/pixel-agents/discussions).
+Have an idea? [Open a feature request](https://github.com/DebisLimbuHub/Agent-Office/issues/new?template=feature_request.yml) - the form will guide you through describing the problem and your proposed solution. You can also browse and join ongoing conversations in [Discussions](https://github.com/DebisLimbuHub/Agent-Office/discussions).
 
 ## Security Issues
 

@@ -1,13 +1,13 @@
 # External Asset Directories
 
-Pixel Agents supports loading furniture assets from directories outside the extension. This lets you use custom or third-party pixel art asset packs alongside the built-in furniture.
+Agent Office supports loading furniture assets from directories outside the extension. This lets you use custom or third-party pixel art asset packs alongside the built-in furniture.
 
 ## Adding an External Directory
 
-1. Open the Pixel Agents panel and click **Settings**
+1. Open the Agent Office panel and click **Settings**
 2. Click **Add Asset Directory** and pick a folder
 3. Your custom assets will appear in the furniture palette immediately, merged with the built-ins
-4. The directory path is saved to `~/.pixel-agents/config.json` and reloaded automatically on restart
+4. For compatibility, the directory path is still saved to `~/.pixel-agents/config.json` and reloaded automatically on restart
 
 To remove a directory, open Settings and click the **X** next to it.
 
@@ -180,6 +180,6 @@ Use `"rotationScheme": "3-way-mirror"` and add `"mirrorSide": true` to the side 
 
 If you have a pixel art asset pack (such as **[Office Interior Tileset (16x16)](https://donarg.itch.io/officetileset)** by [Donarg](https://donarg.itch.io/) — highly recommended), you'll need to slice the tileset into individual PNGs and create a `manifest.json` for each item.
 
-The manifest format is simple enough that an AI assistant like Claude Code can generate them for you — just describe your sprites or share the PNGs and ask it to write the manifests.
+The manifest format is simple enough that an AI coding assistant can generate them for you — just describe your sprites or share the PNGs and ask it to write the manifests.
 
 The `scripts/asset-manager.html` in this repo also provides a visual editor for creating and editing manifests.

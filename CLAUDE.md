@@ -1,6 +1,6 @@
-# Pixel Agents — Compressed Reference
+# Agent Office — Compressed Reference
 
-VS Code extension with embedded React webview: pixel art office where AI agents (Claude Code terminals) are animated characters.
+VS Code extension with embedded React webview: Agent Office is a pixel art workspace where AI agents (the current backend's terminals) are animated characters.
 
 ## Architecture
 
@@ -62,7 +62,7 @@ scripts/                      — 7-stage asset extraction pipeline
   0-import-tileset.ts         — Interactive CLI wrapper
   1-detect-assets.ts          — Flood-fill asset detection
   2-asset-editor.html         — Browser UI for position/bounds editing
-  3-vision-inspect.ts         — Claude vision auto-metadata
+  3-vision-inspect.ts         — LLM vision auto-metadata
   4-review-metadata.html      — Browser UI for metadata review
   5-export-assets.ts          — Export PNGs + furniture-catalog.json
   asset-manager.html          — Unified editor (Stage 2+4 combined), Save/Save As via File System Access API
@@ -72,11 +72,11 @@ scripts/                      — 7-stage asset extraction pipeline
 
 ## Core Concepts
 
-**Vocabulary**: Terminal = VS Code terminal running Claude. Session = JSONL conversation file. Agent = webview character bound 1:1 to a terminal.
+**Vocabulary**: Terminal = VS Code terminal running the current backend. Session = JSONL conversation file. Agent = webview character bound 1:1 to a terminal.
 
 **Extension ↔ Webview**: `postMessage` protocol. Key messages: `openClaude`, `agentCreated/Closed`, `focusAgent`, `agentToolStart/Done/Clear`, `agentStatus`, `existingAgents`, `layoutLoaded`, `furnitureAssetsLoaded`, `floorTilesLoaded`, `wallTilesLoaded`, `saveLayout`, `saveAgentSeats`, `exportLayout`, `importLayout`, `settingsLoaded` (includes `externalAssetDirectories`), `setSoundEnabled`, `addExternalAssetDirectory`, `removeExternalAssetDirectory` (field: `path`), `externalAssetDirectoriesUpdated` (field: `dirs`).
 
-**One-agent-per-terminal**: Each "+ Agent" click → new terminal (`claude --session-id <uuid>`) → immediate agent creation → 1s poll for `<uuid>.jsonl` → file watching starts.
+**One-agent-per-terminal**: Each "+ Agent" click → new terminal (currently `claude --session-id <uuid>`) → immediate agent creation → 1s poll for `<uuid>.jsonl` → file watching starts.
 
 **Terminal adoption**: Project-level 1s scan detects unknown JSONL files. If active terminal has no agent → adopt. If focused agent exists → reassign (`/clear` handling).
 
