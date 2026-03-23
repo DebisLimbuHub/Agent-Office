@@ -1,7 +1,14 @@
 import type * as vscode from 'vscode';
 
+export type BackendId = 'claude' | 'codex';
+
+export function normalizeBackendId(value: unknown): BackendId {
+  return value === 'codex' ? 'codex' : 'claude';
+}
+
 export interface AgentState {
   id: number;
+  backendId: BackendId;
   terminalRef: vscode.Terminal;
   projectDir: string;
   jsonlFile: string;
@@ -21,6 +28,7 @@ export interface AgentState {
 
 export interface PersistedAgent {
   id: number;
+  backendId: BackendId;
   terminalName: string;
   jsonlFile: string;
   projectDir: string;

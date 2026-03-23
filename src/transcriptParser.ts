@@ -1,6 +1,6 @@
 import * as path from 'path';
-import type * as vscode from 'vscode';
 
+import type { BackendEventSink } from './backends/types.js';
 import {
   BASH_COMMAND_DISPLAY_MAX_LENGTH,
   TASK_DESCRIPTION_DISPLAY_MAX_LENGTH,
@@ -63,7 +63,7 @@ export function processTranscriptLine(
   agents: Map<number, AgentState>,
   waitingTimers: Map<number, ReturnType<typeof setTimeout>>,
   permissionTimers: Map<number, ReturnType<typeof setTimeout>>,
-  webview: vscode.Webview | undefined,
+  emitEvent: BackendEventSink,
 ): void {
   const agent = agents.get(agentId);
   if (!agent) return;
@@ -83,7 +83,7 @@ export function processTranscriptLine(
         cancelWaitingTimer(agentId, waitingTimers);
         agent.isWaiting = false;
         agent.hadToolsInTurn = true;
-        webview?.postMessage({ type: 'agentStatus', id: agentId, status: 'active' });
+        emitEvent({ type: 'statusChanged', agentId, status: 'active' });
         let hasNonExemptTool = false;
         for (const block of blocks) {
           if (block.type === 'tool_use' && block.id) {
@@ -96,26 +96,32 @@ export function processTranscriptLine(
             if (!PERMISSION_EXEMPT_TOOLS.has(toolName)) {
               hasNonExemptTool = true;
             }
-            webview?.postMessage({
-              type: 'agentToolStart',
-              id: agentId,
+            emitEvent({
+              type: 'toolStarted',
+              agentId,
               toolId: block.id,
               status,
             });
           }
         }
         if (hasNonExemptTool) {
-          startPermissionTimer(agentId, agents, permissionTimers, PERMISSION_EXEMPT_TOOLS, webview);
+          startPermissionTimer(
+            agentId,
+            agents,
+            permissionTimers,
+            PERMISSION_EXEMPT_TOOLS,
+            emitEvent,
+          );
         }
       } else if (blocks.some((b) => b.type === 'text') && !agent.hadToolsInTurn) {
         // Text-only response in a turn that hasn't used any tools.
         // turn_duration handles tool-using turns reliably but is never
         // emitted for text-only turns, so we use a silence-based timer:
         // if no new JSONL data arrives within TEXT_IDLE_DELAY_MS, mark as waiting.
-        startWaitingTimer(agentId, TEXT_IDLE_DELAY_MS, agents, waitingTimers, webview);
+        startWaitingTimer(agentId, TEXT_IDLE_DELAY_MS, agents, waitingTimers, emitEvent);
       }
     } else if (record.type === 'progress') {
-      processProgressRecord(agentId, record, agents, waitingTimers, permissionTimers, webview);
+      processProgressRecord(agentId, record, agents, waitingTimers, permissionTimers, emitEvent);
     } else if (record.type === 'user') {
       const content = record.message?.content;
       if (Array.isArray(content)) {
@@ -131,9 +137,9 @@ export function processTranscriptLine(
               if (completedToolName === 'Task' || completedToolName === 'Agent') {
                 agent.activeSubagentToolIds.delete(completedToolId);
                 agent.activeSubagentToolNames.delete(completedToolId);
-                webview?.postMessage({
-                  type: 'subagentClear',
-                  id: agentId,
+                emitEvent({
+                  type: 'subagentCleared',
+                  agentId,
                   parentToolId: completedToolId,
                 });
               }
@@ -142,11 +148,7 @@ export function processTranscriptLine(
               agent.activeToolNames.delete(completedToolId);
               const toolId = completedToolId;
               setTimeout(() => {
-                webview?.postMessage({
-                  type: 'agentToolDone',
-                  id: agentId,
-                  toolId,
-                });
+                emitEvent({ type: 'toolFinished', agentId, toolId });
               }, TOOL_DONE_DELAY_MS);
             }
           }
@@ -158,13 +160,13 @@ export function processTranscriptLine(
         } else {
           // New user text prompt — new turn starting
           cancelWaitingTimer(agentId, waitingTimers);
-          clearAgentActivity(agent, agentId, permissionTimers, webview);
+          clearAgentActivity(agent, agentId, permissionTimers, emitEvent);
           agent.hadToolsInTurn = false;
         }
       } else if (typeof content === 'string' && content.trim()) {
         // New user text prompt — new turn starting
         cancelWaitingTimer(agentId, waitingTimers);
-        clearAgentActivity(agent, agentId, permissionTimers, webview);
+        clearAgentActivity(agent, agentId, permissionTimers, emitEvent);
         agent.hadToolsInTurn = false;
       }
     } else if (record.type === 'system' && record.subtype === 'turn_duration') {
@@ -178,17 +180,13 @@ export function processTranscriptLine(
         agent.activeToolNames.clear();
         agent.activeSubagentToolIds.clear();
         agent.activeSubagentToolNames.clear();
-        webview?.postMessage({ type: 'agentToolsClear', id: agentId });
+        emitEvent({ type: 'toolsCleared', agentId });
       }
 
       agent.isWaiting = true;
       agent.permissionSent = false;
       agent.hadToolsInTurn = false;
-      webview?.postMessage({
-        type: 'agentStatus',
-        id: agentId,
-        status: 'waiting',
-      });
+      emitEvent({ type: 'statusChanged', agentId, status: 'waiting' });
     }
   } catch {
     // Ignore malformed lines
@@ -201,7 +199,7 @@ function processProgressRecord(
   agents: Map<number, AgentState>,
   waitingTimers: Map<number, ReturnType<typeof setTimeout>>,
   permissionTimers: Map<number, ReturnType<typeof setTimeout>>,
-  webview: vscode.Webview | undefined,
+  emitEvent: BackendEventSink,
 ): void {
   const agent = agents.get(agentId);
   if (!agent) return;
@@ -217,7 +215,7 @@ function processProgressRecord(
   const dataType = data.type as string | undefined;
   if (dataType === 'bash_progress' || dataType === 'mcp_progress') {
     if (agent.activeToolIds.has(parentToolId)) {
-      startPermissionTimer(agentId, agents, permissionTimers, PERMISSION_EXEMPT_TOOLS, webview);
+      startPermissionTimer(agentId, agents, permissionTimers, PERMISSION_EXEMPT_TOOLS, emitEvent);
     }
     return;
   }
@@ -264,9 +262,9 @@ function processProgressRecord(
           hasNonExemptSubTool = true;
         }
 
-        webview?.postMessage({
-          type: 'subagentToolStart',
-          id: agentId,
+        emitEvent({
+          type: 'subagentToolStarted',
+          agentId,
           parentToolId,
           toolId: block.id,
           status,
@@ -274,7 +272,7 @@ function processProgressRecord(
       }
     }
     if (hasNonExemptSubTool) {
-      startPermissionTimer(agentId, agents, permissionTimers, PERMISSION_EXEMPT_TOOLS, webview);
+      startPermissionTimer(agentId, agents, permissionTimers, PERMISSION_EXEMPT_TOOLS, emitEvent);
     }
   } else if (msgType === 'user') {
     for (const block of content) {
@@ -295,9 +293,9 @@ function processProgressRecord(
 
         const toolId = block.tool_use_id;
         setTimeout(() => {
-          webview?.postMessage({
-            type: 'subagentToolDone',
-            id: agentId,
+          emitEvent({
+            type: 'subagentToolFinished',
+            agentId,
             parentToolId,
             toolId,
           });
@@ -317,7 +315,7 @@ function processProgressRecord(
       if (stillHasNonExempt) break;
     }
     if (stillHasNonExempt) {
-      startPermissionTimer(agentId, agents, permissionTimers, PERMISSION_EXEMPT_TOOLS, webview);
+      startPermissionTimer(agentId, agents, permissionTimers, PERMISSION_EXEMPT_TOOLS, emitEvent);
     }
   }
 }
