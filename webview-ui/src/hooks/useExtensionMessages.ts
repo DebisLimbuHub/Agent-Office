@@ -1,5 +1,12 @@
+import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
+import type { BackendDescriptor, BackendId } from '../../../shared/protocol/backends.ts';
+import {
+  DEFAULT_SELECTED_BACKEND_ID,
+  normalizeBackendId,
+  resolveSelectedBackendId,
+} from '../backendOptions.js';
 import { playDoneSound, setSoundEnabled } from '../notificationSound.js';
 import type { OfficeState } from '../office/engine/officeState.js';
 import { setFloorSprites } from '../office/floorTiles.js';
@@ -58,6 +65,9 @@ export interface ExtensionMessageState {
   loadedAssets?: { catalog: FurnitureAsset[]; sprites: Record<string, string[][]> };
   workspaceFolders: WorkspaceFolder[];
   externalAssetDirectories: string[];
+  availableBackends: BackendDescriptor[];
+  selectedBackendId: BackendId;
+  setSelectedBackendId: Dispatch<SetStateAction<BackendId>>;
 }
 
 function saveAgentSeats(os: OfficeState): void {
@@ -89,6 +99,10 @@ export function useExtensionMessages(
   >();
   const [workspaceFolders, setWorkspaceFolders] = useState<WorkspaceFolder[]>([]);
   const [externalAssetDirectories, setExternalAssetDirectories] = useState<string[]>([]);
+  const [availableBackends, setAvailableBackends] = useState<BackendDescriptor[]>([]);
+  const [selectedBackendId, setSelectedBackendId] = useState<BackendId>(
+    DEFAULT_SELECTED_BACKEND_ID,
+  );
 
   // Track whether initial layout has been loaded (ref to avoid re-render)
   const layoutReadyRef = useRef(false);
@@ -390,6 +404,11 @@ export function useExtensionMessages(
       } else if (msg.type === 'workspaceFolders') {
         const folders = msg.folders as WorkspaceFolder[];
         setWorkspaceFolders(folders);
+      } else if (msg.type === 'backendProvidersLoaded') {
+        const backends = Array.isArray(msg.backends) ? (msg.backends as BackendDescriptor[]) : [];
+        const defaultBackendId = normalizeBackendId(msg.defaultBackendId);
+        setAvailableBackends(backends);
+        setSelectedBackendId((prev) => resolveSelectedBackendId(backends, prev, defaultBackendId));
       } else if (msg.type === 'settingsLoaded') {
         const soundOn = msg.soundEnabled as boolean;
         setSoundEnabled(soundOn);
@@ -430,5 +449,8 @@ export function useExtensionMessages(
     loadedAssets,
     workspaceFolders,
     externalAssetDirectories,
+    availableBackends,
+    selectedBackendId,
+    setSelectedBackendId,
   };
 }

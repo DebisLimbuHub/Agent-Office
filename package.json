@@ -63,6 +63,7 @@
     "watch:webview": "cd webview-ui && npm run build -- --watch",
     "package": "npm run check-types && npm run lint && node esbuild.js --production && npm run build:webview",
     "check-types": "tsc --noEmit",
+    "test:host": "node --import tsx --test src/backends/codex/*.test.ts",
     "test:webview": "cd webview-ui && npm run test",
     "test": "npm run test:webview",
     "prepare": "husky",
@@ -74,7 +75,6 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"webview-ui/src/**/*.{ts,tsx,css}\" \"*.{js,mjs}\" \"webview-ui/*.{js,ts}\""
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "^0.78.0",
     "@types/node": "25.x",
     "@types/pngjs": "^6.0.5",
     "@types/vscode": "^1.105.0",

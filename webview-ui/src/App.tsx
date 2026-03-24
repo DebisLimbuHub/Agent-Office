@@ -148,6 +148,9 @@ function App() {
     loadedAssets,
     workspaceFolders,
     externalAssetDirectories,
+    availableBackends,
+    selectedBackendId,
+    setSelectedBackendId,
   } = useExtensionMessages(getOfficeState, editor.setLastSavedLayout, isEditDirty);
 
   // Show migration notice once layout reset is detected
@@ -185,6 +188,18 @@ function App() {
   const handleCloseAgent = useCallback((id: number) => {
     vscode.postMessage({ type: 'closeAgent', id });
   }, []);
+
+  const handleCreateSession = useCallback(
+    (options?: { backendId?: string; folderPath?: string; bypassPermissions?: boolean }) => {
+      vscode.postMessage({
+        type: 'createSession',
+        backendId: options?.backendId ?? selectedBackendId,
+        folderPath: options?.folderPath,
+        bypassPermissions: options?.bypassPermissions,
+      });
+    },
+    [selectedBackendId],
+  );
 
   const handleClick = useCallback((agentId: number) => {
     // If clicked agent is a sub-agent, focus the parent's terminal instead
@@ -281,7 +296,7 @@ function App() {
 
       <BottomToolbar
         isEditMode={editor.isEditMode}
-        onCreateSession={editor.handleCreateSession}
+        onCreateSession={handleCreateSession}
         onToggleEditMode={editor.handleToggleEditMode}
         isDebugMode={isDebugMode}
         onToggleDebugMode={handleToggleDebugMode}
@@ -289,6 +304,9 @@ function App() {
         onToggleAlwaysShowOverlay={handleToggleAlwaysShowOverlay}
         workspaceFolders={workspaceFolders}
         externalAssetDirectories={externalAssetDirectories}
+        availableBackends={availableBackends}
+        selectedBackendId={selectedBackendId}
+        onSelectedBackendChange={setSelectedBackendId}
       />
 
       {editor.isEditMode && editor.isDirty && (

@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 
+import type { BackendDescriptor, BackendId } from '../../../shared/protocol/backends.ts';
 import type { WorkspaceFolder } from '../hooks/useExtensionMessages.js';
-import { vscode } from '../vscodeApi.js';
 import { SettingsModal } from './SettingsModal.js';
 
 interface BottomToolbarProps {
   isEditMode: boolean;
-  onCreateSession: () => void;
+  onCreateSession: (options?: {
+    backendId?: BackendId;
+    folderPath?: string;
+    bypassPermissions?: boolean;
+  }) => void;
   onToggleEditMode: () => void;
   isDebugMode: boolean;
   onToggleDebugMode: () => void;
@@ -14,6 +18,9 @@ interface BottomToolbarProps {
   onToggleAlwaysShowOverlay: () => void;
   workspaceFolders: WorkspaceFolder[];
   externalAssetDirectories: string[];
+  availableBackends: BackendDescriptor[];
+  selectedBackendId: BackendId;
+  onSelectedBackendChange: (backendId: BackendId) => void;
 }
 
 const panelStyle: React.CSSProperties = {
@@ -57,43 +64,55 @@ export function BottomToolbar({
   onToggleAlwaysShowOverlay,
   workspaceFolders,
   externalAssetDirectories,
+  availableBackends,
+  selectedBackendId,
+  onSelectedBackendChange,
 }: BottomToolbarProps) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFolderPickerOpen, setIsFolderPickerOpen] = useState(false);
   const [isBypassMenuOpen, setIsBypassMenuOpen] = useState(false);
+  const [isBackendMenuOpen, setIsBackendMenuOpen] = useState(false);
   const [hoveredFolder, setHoveredFolder] = useState<number | null>(null);
   const [hoveredBypass, setHoveredBypass] = useState<number | null>(null);
-  const folderPickerRef = useRef<HTMLDivElement>(null);
+  const [hoveredBackend, setHoveredBackend] = useState<number | null>(null);
+  const sessionMenuRef = useRef<HTMLDivElement>(null);
   const pendingBypassRef = useRef(false);
 
   // Close folder picker / bypass menu on outside click
   useEffect(() => {
-    if (!isFolderPickerOpen && !isBypassMenuOpen) return;
+    if (!isFolderPickerOpen && !isBypassMenuOpen && !isBackendMenuOpen) return;
     const handleClick = (e: MouseEvent) => {
-      if (folderPickerRef.current && !folderPickerRef.current.contains(e.target as Node)) {
+      if (sessionMenuRef.current && !sessionMenuRef.current.contains(e.target as Node)) {
         setIsFolderPickerOpen(false);
         setIsBypassMenuOpen(false);
+        setIsBackendMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, [isFolderPickerOpen, isBypassMenuOpen]);
+  }, [isFolderPickerOpen, isBypassMenuOpen, isBackendMenuOpen]);
 
   const hasMultipleFolders = workspaceFolders.length > 1;
+  const selectedBackend =
+    availableBackends.find((backend) => backend.id === selectedBackendId) ?? availableBackends[0];
+  const supportsBypassPermissions = selectedBackend?.supportsBypassPermissions ?? false;
 
   const handleAgentClick = () => {
+    setIsBackendMenuOpen(false);
     setIsBypassMenuOpen(false);
     pendingBypassRef.current = false;
     if (hasMultipleFolders) {
       setIsFolderPickerOpen((v) => !v);
     } else {
-      onCreateSession();
+      onCreateSession({ backendId: selectedBackendId });
     }
   };
 
   const handleAgentRightClick = (e: React.MouseEvent) => {
+    if (!supportsBypassPermissions) return;
     e.preventDefault();
+    setIsBackendMenuOpen(false);
     setIsFolderPickerOpen(false);
     setIsBypassMenuOpen((v) => !v);
   };
@@ -102,7 +121,11 @@ export function BottomToolbar({
     setIsFolderPickerOpen(false);
     const bypassPermissions = pendingBypassRef.current;
     pendingBypassRef.current = false;
-    vscode.postMessage({ type: 'createSession', folderPath: folder.path, bypassPermissions });
+    onCreateSession({
+      backendId: selectedBackendId,
+      folderPath: folder.path,
+      bypassPermissions,
+    });
   };
 
   const handleBypassSelect = (bypassPermissions: boolean) => {
@@ -111,13 +134,39 @@ export function BottomToolbar({
       pendingBypassRef.current = bypassPermissions;
       setIsFolderPickerOpen(true);
     } else {
-      vscode.postMessage({ type: 'createSession', bypassPermissions });
+      onCreateSession({ backendId: selectedBackendId, bypassPermissions });
     }
   };
 
   return (
     <div style={panelStyle}>
-      <div ref={folderPickerRef} style={{ position: 'relative' }}>
+      <div ref={sessionMenuRef} style={{ position: 'relative', display: 'flex', gap: 4 }}>
+        <button
+          onClick={() => {
+            setIsFolderPickerOpen(false);
+            setIsBypassMenuOpen(false);
+            setIsBackendMenuOpen((v) => !v);
+          }}
+          onMouseEnter={() => setHovered('backend')}
+          onMouseLeave={() => setHovered(null)}
+          style={{
+            ...btnBase,
+            padding: '5px 10px',
+            maxWidth: 190,
+            background:
+              hovered === 'backend' || isBackendMenuOpen
+                ? 'var(--pixel-btn-hover-bg)'
+                : 'var(--pixel-btn-bg)',
+            border: '2px solid var(--pixel-border)',
+            color: selectedBackend?.isImplemented ? 'var(--pixel-text)' : 'var(--pixel-text-dim)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+          title="Select backend"
+        >
+          {selectedBackend?.displayName ?? 'Backend'}
+        </button>
         <button
           onClick={handleAgentClick}
           onContextMenu={handleAgentRightClick}
@@ -133,9 +182,70 @@ export function BottomToolbar({
             border: '2px solid var(--pixel-agent-border)',
             color: 'var(--pixel-agent-text)',
           }}
+          title={
+            supportsBypassPermissions
+              ? `Create ${selectedBackend?.displayName ?? 'agent'} session`
+              : `Create ${selectedBackend?.displayName ?? 'agent'} session`
+          }
         >
           + Agent
         </button>
+        {isBackendMenuOpen && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '100%',
+              left: 0,
+              marginBottom: 4,
+              background: 'var(--pixel-bg)',
+              border: '2px solid var(--pixel-border)',
+              borderRadius: 0,
+              boxShadow: 'var(--pixel-shadow)',
+              minWidth: 210,
+              zIndex: 'var(--pixel-controls-z)',
+            }}
+          >
+            {availableBackends.map((backend, i) => {
+              const isSelected = backend.id === selectedBackendId;
+              const isDisabled = !backend.isImplemented;
+              return (
+                <button
+                  key={backend.id}
+                  onClick={() => {
+                    if (isDisabled) return;
+                    onSelectedBackendChange(backend.id);
+                    setIsBackendMenuOpen(false);
+                    setIsBypassMenuOpen(false);
+                    pendingBypassRef.current = false;
+                  }}
+                  onMouseEnter={() => setHoveredBackend(i)}
+                  onMouseLeave={() => setHoveredBackend(null)}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '6px 10px',
+                    fontSize: '22px',
+                    color: isDisabled
+                      ? 'var(--pixel-text-dim)'
+                      : isSelected
+                        ? 'var(--pixel-accent)'
+                        : 'var(--pixel-text)',
+                    background: hoveredBackend === i ? 'var(--pixel-btn-hover-bg)' : 'transparent',
+                    border: 'none',
+                    borderRadius: 0,
+                    cursor: isDisabled ? 'default' : 'pointer',
+                    whiteSpace: 'nowrap',
+                    opacity: isDisabled ? 0.7 : 1,
+                  }}
+                >
+                  {backend.displayName}
+                  {!backend.isImplemented ? ' (Soon)' : isSelected ? ' *' : ''}
+                </button>
+              );
+            })}
+          </div>
+        )}
         {isBypassMenuOpen && (
           <div
             style={{
@@ -277,6 +387,7 @@ export function BottomToolbar({
           alwaysShowOverlay={alwaysShowOverlay}
           onToggleAlwaysShowOverlay={onToggleAlwaysShowOverlay}
           externalAssetDirectories={externalAssetDirectories}
+          selectedBackendId={selectedBackendId}
         />
       </div>
     </div>

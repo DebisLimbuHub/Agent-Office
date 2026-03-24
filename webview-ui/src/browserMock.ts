@@ -263,6 +263,24 @@ export function dispatchMockMessages(): void {
   dispatch({ type: 'floorTilesLoaded', sprites: floorSprites });
   dispatch({ type: 'wallTilesLoaded', sets: wallSets });
   dispatch({ type: 'furnitureAssetsLoaded', catalog: furnitureCatalog, sprites: furnitureSprites });
+  dispatch({
+    type: 'backendProvidersLoaded',
+    backends: [
+      {
+        id: 'claude',
+        displayName: 'Claude Code',
+        isImplemented: true,
+        supportsBypassPermissions: true,
+      },
+      {
+        id: 'codex',
+        displayName: 'Codex CLI',
+        isImplemented: true,
+        supportsBypassPermissions: true,
+      },
+    ],
+    defaultBackendId: 'claude',
+  });
   dispatch({ type: 'layoutLoaded', layout });
   dispatch({ type: 'settingsLoaded', soundEnabled: false, externalAssetDirectories: [] });
 

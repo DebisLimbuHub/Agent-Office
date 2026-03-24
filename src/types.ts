@@ -1,10 +1,9 @@
 import type * as vscode from 'vscode';
 
-export type BackendId = 'claude' | 'codex';
+export type { BackendId } from '../shared/protocol/backends.js';
+export { normalizeBackendId } from '../shared/protocol/backends.js';
 
-export function normalizeBackendId(value: unknown): BackendId {
-  return value === 'codex' ? 'codex' : 'claude';
-}
+import type { BackendId } from '../shared/protocol/backends.js';
 
 export interface AgentState {
   id: number;

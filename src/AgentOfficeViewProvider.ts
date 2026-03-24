@@ -3,6 +3,8 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 
+import type { BackendId } from '../shared/protocol/backends.js';
+import { DEFAULT_BACKEND_ID, normalizeBackendId } from '../shared/protocol/backends.js';
 import {
   loadPersistedAgents,
   persistAgents,
@@ -23,7 +25,11 @@ import {
   sendFloorTilesToWebview,
   sendWallTilesToWebview,
 } from './assetLoader.js';
-import { DEFAULT_BACKEND_ID, getBackendProvider, listBackendProviders } from './backends/index.js';
+import {
+  getBackendProvider,
+  listBackendDescriptors,
+  listBackendProviders,
+} from './backends/index.js';
 import type { BackendEvent, BackendHostRuntime } from './backends/types.js';
 import { readConfig, writeConfig } from './configPersistence.js';
 import {
@@ -49,7 +55,7 @@ export class AgentOfficeViewProvider implements vscode.WebviewViewProvider {
 
   activeAgentId = { current: null as number | null };
   knownTranscriptFiles = new Set<string>();
-  projectScanTimer = { current: null as ReturnType<typeof setInterval> | null };
+  projectScanTimers = new Map<string, ReturnType<typeof setInterval>>();
 
   defaultLayout: Record<string, unknown> | null = null;
 
@@ -77,7 +83,7 @@ export class AgentOfficeViewProvider implements vscode.WebviewViewProvider {
       nextAgentIdRef: this.nextAgentId,
       nextTerminalIndexRef: this.nextTerminalIndex,
       activeAgentIdRef: this.activeAgentId,
-      projectScanTimerRef: this.projectScanTimer,
+      projectScanTimers: this.projectScanTimers,
       agents: this.agents,
       knownTranscriptFiles: this.knownTranscriptFiles,
       fileWatchers: this.fileWatchers,
@@ -183,6 +189,67 @@ export class AgentOfficeViewProvider implements vscode.WebviewViewProvider {
     this.persistAgents();
   }
 
+  private postBackendCatalog(): void {
+    if (!this.webview) return;
+    this.webview.postMessage({
+      type: 'backendProvidersLoaded',
+      backends: listBackendDescriptors(),
+      defaultBackendId: DEFAULT_BACKEND_ID,
+    });
+  }
+
+  private resolveAssetsRoot(): string | null {
+    const extensionPath = this.extensionUri.fsPath;
+    const candidates = [
+      path.join(extensionPath, 'dist'),
+      path.join(extensionPath, 'webview-ui', 'public'),
+    ];
+
+    for (const candidate of candidates) {
+      if (fs.existsSync(path.join(candidate, 'assets'))) {
+        return candidate;
+      }
+    }
+
+    return null;
+  }
+
+  private async initializeAssetsAndLayout(): Promise<void> {
+    try {
+      this.assetsRoot = this.resolveAssetsRoot();
+      this.defaultLayout = this.assetsRoot ? loadDefaultLayout(this.assetsRoot) : null;
+
+      if (this.assetsRoot && this.webview) {
+        const characterSprites = await loadCharacterSprites(this.assetsRoot);
+        if (characterSprites) {
+          sendCharacterSpritesToWebview(this.webview, characterSprites);
+        }
+
+        const floorTiles = await loadFloorTiles(this.assetsRoot);
+        if (floorTiles) {
+          sendFloorTilesToWebview(this.webview, floorTiles);
+        }
+
+        const wallTiles = await loadWallTiles(this.assetsRoot);
+        if (wallTiles) {
+          sendWallTilesToWebview(this.webview, wallTiles);
+        }
+
+        const assets = await this.loadAllFurnitureAssets();
+        if (assets) {
+          sendAssetsToWebview(this.webview, assets);
+        }
+      }
+    } catch (err) {
+      console.error('[Extension] ❌ Error loading assets:', err);
+    }
+
+    if (this.webview) {
+      sendLayout(this.context, this.webview, this.defaultLayout);
+      this.startLayoutWatcher();
+    }
+  }
+
   resolveWebviewView(webviewView: vscode.WebviewView) {
     this.webviewView = webviewView;
     webviewView.webview.options = { enableScripts: true };
@@ -190,8 +257,14 @@ export class AgentOfficeViewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.onDidReceiveMessage(async (message) => {
       if (message.type === 'createSession') {
-        const backendId = (message.backendId as string) || DEFAULT_BACKEND_ID;
-        const provider = getBackendProvider(backendId as Parameters<typeof getBackendProvider>[0]);
+        const backendId = normalizeBackendId(message.backendId);
+        const provider = getBackendProvider(backendId);
+        if (!provider.isImplemented) {
+          vscode.window.showInformationMessage(
+            `Agent Office: ${provider.displayName} support is not implemented yet.`,
+          );
+          return;
+        }
         await provider.createSession(this.hostRuntime, {
           folderPath: message.folderPath as string | undefined,
           bypassPermissions: message.bypassPermissions as boolean | undefined,
@@ -216,6 +289,7 @@ export class AgentOfficeViewProvider implements vscode.WebviewViewProvider {
         this.context.globalState.update(GLOBAL_KEY_SOUND_ENABLED, message.enabled);
       } else if (message.type === 'webviewReady') {
         this.restorePersistedAgents();
+        this.postBackendCatalog();
 
         const soundEnabled = this.context.globalState.get<boolean>(GLOBAL_KEY_SOUND_ENABLED, true);
         const config = readConfig();
@@ -243,110 +317,17 @@ export class AgentOfficeViewProvider implements vscode.WebviewViewProvider {
           }
         }
 
-        const projectDir = getBackendProvider(DEFAULT_BACKEND_ID).getSessionsDirectory();
-        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-        console.log('[Extension] workspaceRoot:', workspaceRoot);
-        console.log('[Extension] projectDir:', projectDir);
-        if (projectDir) {
-          (async () => {
-            try {
-              console.log('[Extension] Loading furniture assets...');
-              const extensionPath = this.extensionUri.fsPath;
-              console.log('[Extension] extensionPath:', extensionPath);
-
-              const bundledAssetsDir = path.join(extensionPath, 'dist', 'assets');
-              let assetsRoot: string | null = null;
-              if (fs.existsSync(bundledAssetsDir)) {
-                console.log('[Extension] Found bundled assets at dist/');
-                assetsRoot = path.join(extensionPath, 'dist');
-              } else if (workspaceRoot) {
-                console.log('[Extension] Trying workspace for assets...');
-                assetsRoot = workspaceRoot;
-              }
-
-              if (!assetsRoot) {
-                console.log('[Extension] ⚠️  No assets directory found');
-                if (this.webview) {
-                  sendLayout(this.context, this.webview, this.defaultLayout);
-                  this.startLayoutWatcher();
-                }
-                return;
-              }
-
-              console.log('[Extension] Using assetsRoot:', assetsRoot);
-              this.assetsRoot = assetsRoot;
-              this.defaultLayout = loadDefaultLayout(assetsRoot);
-
-              const characterSprites = await loadCharacterSprites(assetsRoot);
-              if (characterSprites && this.webview) {
-                console.log('[Extension] Character sprites loaded, sending to webview');
-                sendCharacterSpritesToWebview(this.webview, characterSprites);
-              }
-
-              const floorTiles = await loadFloorTiles(assetsRoot);
-              if (floorTiles && this.webview) {
-                console.log('[Extension] Floor tiles loaded, sending to webview');
-                sendFloorTilesToWebview(this.webview, floorTiles);
-              }
-
-              const wallTiles = await loadWallTiles(assetsRoot);
-              if (wallTiles && this.webview) {
-                console.log('[Extension] Wall tiles loaded, sending to webview');
-                sendWallTilesToWebview(this.webview, wallTiles);
-              }
-
-              const assets = await this.loadAllFurnitureAssets();
-              if (assets && this.webview) {
-                console.log('[Extension] ✅ Assets loaded, sending to webview');
-                sendAssetsToWebview(this.webview, assets);
-              }
-            } catch (err) {
-              console.error('[Extension] ❌ Error loading assets:', err);
-            }
-            if (this.webview) {
-              console.log('[Extension] Sending saved layout');
-              sendLayout(this.context, this.webview, this.defaultLayout);
-              this.startLayoutWatcher();
-            }
-          })();
-        } else {
-          (async () => {
-            try {
-              const extensionPath = this.extensionUri.fsPath;
-              const bundledAssetsDir = path.join(extensionPath, 'dist', 'assets');
-              if (fs.existsSync(bundledAssetsDir)) {
-                const distRoot = path.join(extensionPath, 'dist');
-                this.defaultLayout = loadDefaultLayout(distRoot);
-                const characterSprites = await loadCharacterSprites(distRoot);
-                if (characterSprites && this.webview) {
-                  sendCharacterSpritesToWebview(this.webview, characterSprites);
-                }
-                const floorTiles = await loadFloorTiles(distRoot);
-                if (floorTiles && this.webview) {
-                  sendFloorTilesToWebview(this.webview, floorTiles);
-                }
-                const wallTiles = await loadWallTiles(distRoot);
-                if (wallTiles && this.webview) {
-                  sendWallTilesToWebview(this.webview, wallTiles);
-                }
-              }
-            } catch {
-              /* ignore */
-            }
-            if (this.webview) {
-              sendLayout(this.context, this.webview, this.defaultLayout);
-              this.startLayoutWatcher();
-            }
-          })();
-        }
+        void this.initializeAssetsAndLayout();
         sendExistingAgents(this.agents, this.context, this.webview);
       } else if (message.type === 'openSessionsFolder') {
-        // Try focused agent's backend first, fall back to default
         const focusedAgent =
           this.activeAgentId.current !== null
             ? this.agents.get(this.activeAgentId.current)
             : undefined;
-        const backendId = focusedAgent?.backendId ?? DEFAULT_BACKEND_ID;
+        const fallbackBackendId = focusedAgent?.backendId ?? DEFAULT_BACKEND_ID;
+        const backendId: BackendId = focusedAgent
+          ? focusedAgent.backendId
+          : normalizeBackendId(message.backendId, fallbackBackendId);
         const projectDir = getBackendProvider(backendId).getSessionsDirectory();
         if (projectDir && fs.existsSync(projectDir)) {
           vscode.env.openExternal(vscode.Uri.file(projectDir));
@@ -546,10 +527,10 @@ export class AgentOfficeViewProvider implements vscode.WebviewViewProvider {
         this.persistAgents,
       );
     }
-    if (this.projectScanTimer.current) {
-      clearInterval(this.projectScanTimer.current);
-      this.projectScanTimer.current = null;
+    for (const timer of this.projectScanTimers.values()) {
+      clearInterval(timer);
     }
+    this.projectScanTimers.clear();
   }
 }
 

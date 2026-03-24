@@ -108,7 +108,7 @@ export function sendExistingAgents(
   agentIds.sort((a, b) => a - b);
 
   const agentMeta = context.workspaceState.get<
-    Record<string, { palette?: number; seatId?: string }>
+    Record<string, { palette?: number; hueShift?: number; seatId?: string }>
   >(WORKSPACE_KEY_AGENT_SEATS, {});
 
   const folderNames: Record<number, string> = {};

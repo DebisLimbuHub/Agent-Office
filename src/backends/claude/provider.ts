@@ -146,6 +146,7 @@ export const claudeBackendProvider: AgentBackendProvider = {
   id: 'claude',
   displayName: 'Claude Code',
   isImplemented: true,
+  supportsBypassPermissions: true,
   async createSession(runtime: BackendHostRuntime, options: CreateSessionOptions) {
     const folders = vscode.workspace.workspaceFolders;
     const cwd = options.folderPath || folders?.[0]?.uri.fsPath;
@@ -185,7 +186,7 @@ export const claudeBackendProvider: AgentBackendProvider = {
     ensureProjectScan(
       projectDir,
       runtime.knownTranscriptFiles,
-      runtime.projectScanTimerRef,
+      runtime.projectScanTimers,
       runtime.activeAgentIdRef,
       runtime.nextAgentIdRef,
       runtime.agents,
@@ -250,7 +251,7 @@ export const claudeBackendProvider: AgentBackendProvider = {
       ensureProjectScan(
         restoredProjectDir,
         runtime.knownTranscriptFiles,
-        runtime.projectScanTimerRef,
+        runtime.projectScanTimers,
         runtime.activeAgentIdRef,
         runtime.nextAgentIdRef,
         runtime.agents,
@@ -272,7 +273,7 @@ export const claudeBackendProvider: AgentBackendProvider = {
     ensureProjectScan(
       projectDir,
       runtime.knownTranscriptFiles,
-      runtime.projectScanTimerRef,
+      runtime.projectScanTimers,
       runtime.activeAgentIdRef,
       runtime.nextAgentIdRef,
       runtime.agents,

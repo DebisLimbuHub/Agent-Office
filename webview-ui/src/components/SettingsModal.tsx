@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import type { BackendId } from '../../../shared/protocol/backends.ts';
 import { isSoundEnabled, setSoundEnabled } from '../notificationSound.js';
 import { vscode } from '../vscodeApi.js';
 
@@ -11,6 +12,7 @@ interface SettingsModalProps {
   alwaysShowOverlay: boolean;
   onToggleAlwaysShowOverlay: () => void;
   externalAssetDirectories: string[];
+  selectedBackendId: BackendId;
 }
 
 const menuItemBase: React.CSSProperties = {
@@ -36,6 +38,7 @@ export function SettingsModal({
   alwaysShowOverlay,
   onToggleAlwaysShowOverlay,
   externalAssetDirectories,
+  selectedBackendId,
 }: SettingsModalProps) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [soundLocal, setSoundLocal] = useState(isSoundEnabled);
@@ -106,7 +109,7 @@ export function SettingsModal({
         {/* Menu items */}
         <button
           onClick={() => {
-            vscode.postMessage({ type: 'openSessionsFolder' });
+            vscode.postMessage({ type: 'openSessionsFolder', backendId: selectedBackendId });
             onClose();
           }}
           onMouseEnter={() => setHovered('sessions')}

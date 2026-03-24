@@ -1,5 +1,6 @@
 import type * as fs from 'fs';
 
+import type { BackendDescriptor, BackendId } from '../../shared/protocol/backends.js';
 import type { AgentState, PersistedAgent } from '../types.js';
 
 export type BackendAgentStatus = 'active' | 'waiting';
@@ -72,7 +73,7 @@ export interface BackendHostRuntime {
   nextAgentIdRef: { current: number };
   nextTerminalIndexRef: { current: number };
   activeAgentIdRef: { current: number | null };
-  projectScanTimerRef: { current: ReturnType<typeof setInterval> | null };
+  projectScanTimers: Map<string, ReturnType<typeof setInterval>>;
   agents: Map<number, AgentState>;
   knownTranscriptFiles: Set<string>;
   fileWatchers: Map<number, fs.FSWatcher>;
@@ -90,9 +91,10 @@ export interface CreateSessionOptions {
 }
 
 export interface AgentBackendProvider {
-  readonly id: PersistedAgent['backendId'];
+  readonly id: BackendId;
   readonly displayName: string;
   readonly isImplemented: boolean;
+  readonly supportsBypassPermissions: boolean;
   createSession(runtime: BackendHostRuntime, options: CreateSessionOptions): Promise<void>;
   restoreSessions(runtime: BackendHostRuntime, persistedAgents: PersistedAgent[]): void;
   startDiscovery(runtime: BackendHostRuntime): void;
@@ -100,3 +102,5 @@ export interface AgentBackendProvider {
   closeSession(agent: AgentState): void;
   getSessionsDirectory(cwd?: string): string | null;
 }
+
+export type { BackendDescriptor };

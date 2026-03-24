@@ -20,7 +20,7 @@
 
 Agent Office turns multi-agent AI systems into something you can actually see and manage. Each agent becomes a character in a pixel art office. They walk around, sit at their desk, and visually reflect what they are doing - typing when writing code, reading when searching files, waiting when it needs your attention.
 
-Right now it works as a VS Code extension with a single built-in agent backend. The vision though, is a fully agent-agnostic, platform-agnostic interface for orchestrating any AI agents, deployable anywhere.
+Right now it works as a VS Code extension with built-in Claude Code and Codex CLI backends. The vision though, is a fully agent-agnostic, platform-agnostic interface for orchestrating any AI agents, deployable anywhere.
 
 This is the source code for the Agent Office VS Code extension. During this first-pass rebrand, the published package identifiers still use the original `pixel-agents` name for compatibility: [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=pablodelucca.pixel-agents) and [Open VSX](https://open-vsx.org/extension/pablodelucca/pixel-agents).
 
@@ -33,7 +33,7 @@ This is the source code for the Agent Office VS Code extension. During this firs
 - **Office layout editor** — design your office with floors, walls, and furniture using a built-in editor
 - **Speech bubbles** — visual indicators when an agent is waiting for input or needs permission
 - **Sound notifications** — optional chime when an agent finishes its turn
-- **Sub-agent visualization** — Task tool sub-agents spawn as separate characters linked to their parent
+- **Sub-agent visualization** — nested subtasks can appear as separate characters linked to their parent
 - **Persistent layouts** — your office design is saved and shared across VS Code windows
 - **External asset directories** — load custom or third-party furniture packs from any folder on your machine
 - **Diverse characters** — 6 diverse characters. These are based on the amazing work of [JIK-A-4, Metro City](https://jik-a-4.itch.io/metrocity-free-topdown-character-pack).
@@ -45,7 +45,9 @@ This is the source code for the Agent Office VS Code extension. During this firs
 ## Requirements
 
 - VS Code 1.105.0 or later
-- Current backend CLI installed and configured (today this means [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code))
+- A supported backend CLI installed and configured
+
+Today, the built-in providers are Claude Code and Codex CLI. The product direction and UI architecture remain intentionally backend-neutral, with the current work focused on improving backend parity and robustness rather than tying the office UI to any single CLI.
 
 ## Getting Started
 
@@ -66,7 +68,7 @@ Then press **F5** in VS Code to launch the Extension Development Host.
 ### Usage
 
 1. Open the **Agent Office** panel (it appears in the bottom panel area alongside your terminal)
-2. Click **+ Agent** to spawn a new agent terminal and its character. Right-click for the option to launch with `--dangerously-skip-permissions` (bypasses all tool approval prompts)
+2. Click **+ Agent** to spawn a new agent terminal and its character. Right-click for the current built-in backend's bypass-permissions option when available
 3. Start working with the agent and watch the character react in real time
 4. Click a character to select it, then click a seat to reassign it
 5. Click **Layout** to open the office editor and customize your space
@@ -87,7 +89,7 @@ The grid is expandable up to 64×64 tiles. Click the ghost border outside the cu
 
 All office assets (furniture, floors, walls) are now **fully open-source** and included in this repository under `webview-ui/public/assets/`. No external purchases or imports are needed — everything works out of the box.
 
-Each furniture item lives in its own folder under `assets/furniture/` with a `manifest.json` that declares its sprites, rotation groups, state groups (on/off), and animation frames. Floor tiles are individual PNGs in `assets/floors/`, and wall tile sets are in `assets/walls/`. This modular structure makes it easy to add, remove, or modify assets without touching any code.
+Each furniture item lives in its own folder under `webview-ui/public/assets/furniture/` with a `manifest.json` that declares its sprites, rotation groups, state groups (on/off), and animation frames. Floor tiles live in `webview-ui/public/assets/floors/`, and wall tile sets live in `webview-ui/public/assets/walls/`. This modular structure makes it easy to add, remove, or modify assets without touching any code.
 
 To add a new furniture item, create a folder in `webview-ui/public/assets/furniture/` with your PNG sprite(s) and a `manifest.json`, then rebuild. The asset manager (`scripts/asset-manager.html`) provides a visual editor for creating and editing manifests.
 
@@ -97,7 +99,7 @@ Characters are based on the amazing work of [JIK-A-4, Metro City](https://jik-a-
 
 ## How It Works
 
-Agent Office watches the current backend's JSONL transcript files to track what each agent is doing. In today's implementation those files come from Claude Code, but Agent Office itself remains purely observational.
+Agent Office watches backend session artifacts and translates them into a small set of visual states: active work, tool activity, waiting, permission prompts, and subtask activity. In the current implementation, the built-in providers derive those signals from backend-specific JSONL session logs, but the office UI itself is driven by backend-neutral messages.
 
 The webview runs a lightweight game loop with canvas rendering, BFS pathfinding, and a character state machine (idle → walk → type/read). Everything is pixel-perfect at integer zoom levels.
 
@@ -109,7 +111,7 @@ The webview runs a lightweight game loop with canvas rendering, BFS pathfinding,
 ## Known Limitations
 
 - **Agent-terminal sync** — the way agents are connected to terminal instances is not super robust and sometimes desyncs, especially when terminals are rapidly opened/closed or restored across sessions.
-- **Heuristic-based status detection** — the current JSONL transcript format does not provide clear signals for when an agent is waiting for user input or when it has finished its turn. The current detection is based on heuristics (idle timers, turn-duration events) and often misfires — agents may briefly show the wrong status or miss transitions.
+- **Heuristic-based status detection** — some backend session formats still do not provide clean signals for when an agent is waiting for user input or when it has finished its turn. The current detection still uses a mix of explicit events and heuristics, so agents may briefly show the wrong status or miss transitions.
 - **Windows-only testing** — the extension has only been tested on Windows 11. It may work on macOS or Linux, but there could be unexpected issues with file watching, paths, or terminal behavior on those platforms.
 
 ## Where This Is Going
@@ -126,7 +128,7 @@ The long-term vision is an interface where managing AI agents feels like playing
 For this to work, the architecture needs to be modular at every level:
 
 - **Platform-agnostic**: VS Code extension today, Electron app, web app, or any other host environment tomorrow.
-- **Agent-agnostic**: the current backend today, but built to support Codex, OpenCode, Gemini, Cursor, Copilot, and others through composable adapters.
+- **Agent-agnostic**: Claude and Codex today, but built to support OpenCode, Gemini, Cursor, Copilot, and others through composable adapters.
 - **Theme-agnostic**: community-created assets, skins, and themes from any contributor.
 
 We're actively working on the core module and adapter architecture that makes this possible. If you're interested to talk about this further, please visit our [Discussions Section](https://github.com/DebisLimbuHub/Agent-Office/discussions).

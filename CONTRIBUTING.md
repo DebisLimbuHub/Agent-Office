@@ -31,9 +31,9 @@ For development with live rebuilds, run:
 npm run watch
 ```
 
-This starts parallel watchers for both the extension backend (esbuild) and TypeScript type-checking.
+This starts parallel watchers for the extension backend, root TypeScript type-checking, and the webview build.
 
-> **Note:** The webview (Vite) is not included in `watch` — after changing webview code, run `npm run build:webview` or the full `npm run build`.
+> **Note:** `watch` rebuilds the webview bundle, but it does not start the standalone browser-mode dev server. Use `cd webview-ui && npm run dev` when you want the mocked browser runtime with Vite HMR.
 
 ## Running the Mocked Agent Office
 
@@ -62,8 +62,9 @@ Vite will print a local URL (typically `http://localhost:5173`) where the mocked
 |---|---|
 | `src/` | Extension backend — Node.js, VS Code API |
 | `webview-ui/` | React + TypeScript frontend (separate Vite project) |
-| `scripts/` | Asset extraction and generation tooling |
-| `assets/` | Bundled sprites, catalog, and default layout |
+| `webview-ui/public/assets/` | Source assets, furniture manifests, and bundled default layout |
+| `shared/assets/` | Shared asset loading/build helpers used by the extension and browser mock |
+| `scripts/` | Local asset/editor helper pages |
 
 ## Code Guidelines
 

@@ -110,7 +110,7 @@ export function readNewLines(
 export function ensureProjectScan(
   projectDir: string,
   knownTranscriptFiles: Set<string>,
-  projectScanTimerRef: { current: ReturnType<typeof setInterval> | null },
+  projectScanTimers: Map<string, ReturnType<typeof setInterval>>,
   activeAgentIdRef: { current: number | null },
   nextAgentIdRef: { current: number },
   agents: Map<number, AgentState>,
@@ -123,7 +123,8 @@ export function ensureProjectScan(
   persistAgents: () => void,
   processLine: LineProcessor,
 ): void {
-  if (projectScanTimerRef.current) return;
+  const timerKey = `${backendId}:${projectDir}`;
+  if (projectScanTimers.has(timerKey)) return;
   // Seed with all existing transcript files so we only react to truly new ones
   try {
     const files = fs
@@ -137,7 +138,7 @@ export function ensureProjectScan(
     /* dir may not exist yet */
   }
 
-  projectScanTimerRef.current = setInterval(() => {
+  const timer = setInterval(() => {
     scanForNewTranscriptFiles(
       projectDir,
       knownTranscriptFiles,
@@ -154,6 +155,7 @@ export function ensureProjectScan(
       processLine,
     );
   }, PROJECT_SCAN_INTERVAL_MS);
+  projectScanTimers.set(timerKey, timer);
 }
 
 function scanForNewTranscriptFiles(

@@ -1,73 +1,57 @@
-# React + TypeScript + Vite
+# Agent Office Webview
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This folder contains the React + TypeScript webview UI for Agent Office.
 
-Currently, two official plugins are available:
+## What Lives Here
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- `src/App.tsx` is the composition root.
+- `src/hooks/useExtensionMessages.ts` is the main host/webview message boundary.
+- `src/office/` contains the office engine, renderer, layout system, editor, and sprite helpers.
+- `src/browserMock.ts` provides a standalone browser-mode runtime so the UI can be developed without launching the VS Code extension host.
+- `vite.config.ts` builds the webview bundle and wires up the browser mock asset plugin.
 
-## React Compiler
+## Development Modes
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### VS Code webview mode
 
-## Expanding the ESLint configuration
+Build from the repo root and launch the Extension Development Host:
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Then press `F5` in VS Code.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Browser mock mode
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Run the webview as a standalone Vite app:
+
+```bash
+cd webview-ui
+npm run dev
 ```
+
+This uses `src/browserMock.ts` plus the Vite asset plugin to serve the same asset payloads and message shapes that the extension webview expects.
+
+## Asset Flow
+
+- Source assets live in `webview-ui/public/assets/`.
+- `../shared/assets/plugin.ts` exposes decoded asset JSON endpoints in Vite dev mode.
+- The browser mock fetches those endpoints first and falls back to client-side PNG decoding when needed.
+- Production builds emit the webview bundle to `../dist/webview/`.
+
+## Useful Commands
+
+From `webview-ui/`:
+
+```bash
+npm run dev
+npm run build
+npm run lint
+npm run test
+```
+
+## Notes
+
+- The webview is intentionally backend-neutral. It reacts to semantic messages such as `agentToolStart`, `agentStatus`, `layoutLoaded`, and `furnitureAssetsLoaded`.
+- If host payloads change, update `src/hooks/useExtensionMessages.ts` and `src/browserMock.ts` together.
