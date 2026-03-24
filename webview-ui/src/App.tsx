@@ -241,12 +241,12 @@ function App() {
       style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}
     >
       <style>{`
-        @keyframes pixel-agents-pulse {
+        @keyframes agent-office-pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.3; }
         }
-        .pixel-agents-pulse { animation: pixel-agents-pulse ${PULSE_ANIMATION_DURATION_SEC}s ease-in-out infinite; }
-        .pixel-agents-migration-btn:hover { filter: brightness(0.8); }
+        .agent-office-pulse { animation: agent-office-pulse ${PULSE_ANIMATION_DURATION_SEC}s ease-in-out infinite; }
+        .agent-office-migration-btn:hover { filter: brightness(0.8); }
       `}</style>
 
       <OfficeCanvas
@@ -281,7 +281,7 @@ function App() {
 
       <BottomToolbar
         isEditMode={editor.isEditMode}
-        onOpenClaude={editor.handleOpenClaude}
+        onCreateSession={editor.handleCreateSession}
         onToggleEditMode={editor.handleToggleEditMode}
         isDebugMode={isDebugMode}
         onToggleDebugMode={handleToggleDebugMode}
@@ -416,7 +416,7 @@ function App() {
               Stay tuned, and thanks for using Agent Office!
             </p>
             <button
-              className="pixel-agents-migration-btn"
+              className="agent-office-migration-btn"
               style={{
                 padding: '6px 24px 8px',
                 fontSize: '30px',

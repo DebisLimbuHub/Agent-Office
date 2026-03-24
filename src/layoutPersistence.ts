@@ -27,7 +27,7 @@ export function readLayoutFromFile(): Record<string, unknown> | null {
     const raw = fs.readFileSync(filePath, 'utf-8');
     return JSON.parse(raw) as Record<string, unknown>;
   } catch (err) {
-    console.error('[Pixel Agents] Failed to read layout file:', err);
+    console.error('[Agent Office] Failed to read layout file:', err);
     return null;
   }
 }
@@ -44,7 +44,7 @@ export function writeLayoutToFile(layout: Record<string, unknown>): void {
     fs.writeFileSync(tmpPath, json, 'utf-8');
     fs.renameSync(tmpPath, filePath);
   } catch (err) {
-    console.error('[Pixel Agents] Failed to write layout file:', err);
+    console.error('[Agent Office] Failed to write layout file:', err);
   }
 }
 
@@ -72,19 +72,19 @@ export function migrateAndLoadLayout(
     const defaultRevision = (defaultLayout?.[LAYOUT_REVISION_KEY] as number) ?? 0;
     if (defaultRevision > fileRevision) {
       console.log(
-        `[Pixel Agents] Layout revision outdated (${fileRevision} < ${defaultRevision}), resetting to bundled default`,
+        `[Agent Office] Layout revision outdated (${fileRevision} < ${defaultRevision}), resetting to bundled default`,
       );
       writeLayoutToFile(defaultLayout!);
       return { layout: defaultLayout!, wasReset: true };
     }
-    console.log('[Pixel Agents] Layout loaded from file');
+    console.log('[Agent Office] Layout loaded from file');
     return { layout: fromFile, wasReset: false };
   }
 
   // 2. Migrate from workspace state
   const fromState = context.workspaceState.get<Record<string, unknown>>(WORKSPACE_KEY_LAYOUT);
   if (fromState) {
-    console.log('[Pixel Agents] Migrating layout from workspace state to file');
+    console.log('[Agent Office] Migrating layout from workspace state to file');
     writeLayoutToFile(fromState);
     context.workspaceState.update(WORKSPACE_KEY_LAYOUT, undefined);
     return { layout: fromState, wasReset: false };
@@ -92,7 +92,7 @@ export function migrateAndLoadLayout(
 
   // 3. Use bundled default
   if (defaultLayout) {
-    console.log('[Pixel Agents] Writing bundled default layout to file');
+    console.log('[Agent Office] Writing bundled default layout to file');
     writeLayoutToFile(defaultLayout);
     return { layout: defaultLayout, wasReset: false };
   }
@@ -139,10 +139,10 @@ export function watchLayoutFile(
 
       const raw = fs.readFileSync(filePath, 'utf-8');
       const layout = JSON.parse(raw) as Record<string, unknown>;
-      console.log('[Pixel Agents] External layout change detected');
+      console.log('[Agent Office] External layout change detected');
       onExternalChange(layout);
     } catch (err) {
-      console.error('[Pixel Agents] Error checking layout file:', err);
+      console.error('[Agent Office] Error checking layout file:', err);
     }
   }
 

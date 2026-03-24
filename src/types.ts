@@ -11,7 +11,7 @@ export interface AgentState {
   backendId: BackendId;
   terminalRef: vscode.Terminal;
   projectDir: string;
-  jsonlFile: string;
+  transcriptFile: string;
   fileOffset: number;
   lineBuffer: string;
   activeToolIds: Set<string>;
@@ -30,7 +30,7 @@ export interface PersistedAgent {
   id: number;
   backendId: BackendId;
   terminalName: string;
-  jsonlFile: string;
+  transcriptFile: string;
   projectDir: string;
   /** Workspace folder name (only set for multi-root workspaces) */
   folderName?: string;

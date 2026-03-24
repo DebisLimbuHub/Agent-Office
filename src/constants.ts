@@ -1,5 +1,5 @@
 // ── Timing (ms) ──────────────────────────────────────────────
-export const JSONL_POLL_INTERVAL_MS = 1000;
+export const TRANSCRIPT_POLL_INTERVAL_MS = 1000;
 export const FILE_WATCHER_POLL_INTERVAL_MS = 1000;
 export const PROJECT_SCAN_INTERVAL_MS = 1000;
 export const TOOL_DONE_DELAY_MS = 300;
@@ -27,4 +27,4 @@ export const COMMAND_EXPORT_DEFAULT_LAYOUT = 'pixel-agents.exportDefaultLayout';
 export const WORKSPACE_KEY_AGENTS = 'pixel-agents.agents';
 export const WORKSPACE_KEY_AGENT_SEATS = 'pixel-agents.agentSeats';
 export const WORKSPACE_KEY_LAYOUT = 'pixel-agents.layout';
-export const TERMINAL_NAME_PREFIX = 'Claude Code';
+export const TERMINAL_NAME_PREFIX = 'Agent Office';

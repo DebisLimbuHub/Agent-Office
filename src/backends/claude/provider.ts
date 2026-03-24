@@ -3,17 +3,18 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 
-import { JSONL_POLL_INTERVAL_MS, TERMINAL_NAME_PREFIX } from '../../constants.js';
+import { TERMINAL_NAME_PREFIX, TRANSCRIPT_POLL_INTERVAL_MS } from '../../constants.js';
 import { ensureProjectScan, readNewLines, startFileWatching } from '../../fileWatcher.js';
 import type { AgentState, PersistedAgent } from '../../types.js';
 import type { AgentBackendProvider, BackendHostRuntime, CreateSessionOptions } from '../types.js';
+import { processTranscriptLine } from './transcriptParser.js';
 
 export function getClaudeProjectDirPath(cwd?: string): string | null {
   const workspacePath = cwd || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!workspacePath) return null;
   const dirName = workspacePath.replace(/[^a-zA-Z0-9-]/g, '-');
   const projectDir = path.join(os.homedir(), '.claude', 'projects', dirName);
-  console.log(`[Pixel Agents] Project dir: ${workspacePath} → ${dirName}`);
+  console.log(`[Agent Office] Project dir: ${workspacePath} → ${dirName}`);
   return projectDir;
 }
 
@@ -21,7 +22,7 @@ function createClaudeAgentState(
   id: number,
   terminal: vscode.Terminal,
   projectDir: string,
-  jsonlFile: string,
+  transcriptFile: string,
   folderName?: string,
 ): AgentState {
   return {
@@ -29,7 +30,7 @@ function createClaudeAgentState(
     backendId: 'claude',
     terminalRef: terminal,
     projectDir,
-    jsonlFile,
+    transcriptFile,
     fileOffset: 0,
     lineBuffer: '',
     activeToolIds: new Set(),
@@ -53,20 +54,21 @@ function watchTranscriptWhenReady(
   if (!agent) return;
 
   try {
-    if (fs.existsSync(agent.jsonlFile)) {
+    if (fs.existsSync(agent.transcriptFile)) {
       if (persistedAgent) {
-        const stat = fs.statSync(agent.jsonlFile);
+        const stat = fs.statSync(agent.transcriptFile);
         agent.fileOffset = stat.size;
       }
       startFileWatching(
         agentId,
-        agent.jsonlFile,
+        agent.transcriptFile,
         runtime.agents,
         runtime.fileWatchers,
         runtime.pollingTimers,
         runtime.waitingTimers,
         runtime.permissionTimers,
         runtime.emitEvent,
+        processTranscriptLine,
       );
       if (!persistedAgent) {
         readNewLines(
@@ -75,6 +77,7 @@ function watchTranscriptWhenReady(
           runtime.waitingTimers,
           runtime.permissionTimers,
           runtime.emitEvent,
+          processTranscriptLine,
         );
       }
       return;
@@ -87,37 +90,38 @@ function watchTranscriptWhenReady(
     const currentAgent = runtime.agents.get(agentId);
     if (!currentAgent) {
       clearInterval(pollTimer);
-      runtime.jsonlPollTimers.delete(agentId);
+      runtime.transcriptPollTimers.delete(agentId);
       return;
     }
 
     try {
-      if (!fs.existsSync(currentAgent.jsonlFile)) {
+      if (!fs.existsSync(currentAgent.transcriptFile)) {
         return;
       }
 
       console.log(
         persistedAgent
-          ? `[Pixel Agents] Restored agent ${agentId}: found JSONL file`
-          : `[Pixel Agents] Agent ${agentId}: found JSONL file ${path.basename(currentAgent.jsonlFile)}`,
+          ? `[Agent Office] Restored agent ${agentId}: found transcript file`
+          : `[Agent Office] Agent ${agentId}: found transcript file ${path.basename(currentAgent.transcriptFile)}`,
       );
       clearInterval(pollTimer);
-      runtime.jsonlPollTimers.delete(agentId);
+      runtime.transcriptPollTimers.delete(agentId);
 
       if (persistedAgent) {
-        const stat = fs.statSync(currentAgent.jsonlFile);
+        const stat = fs.statSync(currentAgent.transcriptFile);
         currentAgent.fileOffset = stat.size;
       }
 
       startFileWatching(
         agentId,
-        currentAgent.jsonlFile,
+        currentAgent.transcriptFile,
         runtime.agents,
         runtime.fileWatchers,
         runtime.pollingTimers,
         runtime.waitingTimers,
         runtime.permissionTimers,
         runtime.emitEvent,
+        processTranscriptLine,
       );
 
       if (!persistedAgent) {
@@ -127,14 +131,15 @@ function watchTranscriptWhenReady(
           runtime.waitingTimers,
           runtime.permissionTimers,
           runtime.emitEvent,
+          processTranscriptLine,
         );
       }
     } catch {
       /* file may not exist yet */
     }
-  }, JSONL_POLL_INTERVAL_MS);
+  }, TRANSCRIPT_POLL_INTERVAL_MS);
 
-  runtime.jsonlPollTimers.set(agentId, pollTimer);
+  runtime.transcriptPollTimers.set(agentId, pollTimer);
 }
 
 export const claudeBackendProvider: AgentBackendProvider = {
@@ -160,7 +165,7 @@ export const claudeBackendProvider: AgentBackendProvider = {
 
     const projectDir = getClaudeProjectDirPath(cwd);
     if (!projectDir) {
-      console.log('[Pixel Agents] No project dir, cannot track agent');
+      console.log('[Agent Office] No project dir, cannot track agent');
       return;
     }
 
@@ -174,7 +179,7 @@ export const claudeBackendProvider: AgentBackendProvider = {
     runtime.agents.set(agentId, agent);
     runtime.activeAgentIdRef.current = agentId;
     runtime.persistAgents();
-    console.log(`[Pixel Agents] Agent ${agentId}: created for terminal ${terminal.name}`);
+    console.log(`[Agent Office] Agent ${agentId}: created for terminal ${terminal.name}`);
     runtime.emitEvent({ type: 'sessionCreated', agentId, folderName });
 
     ensureProjectScan(
@@ -191,6 +196,7 @@ export const claudeBackendProvider: AgentBackendProvider = {
       runtime.emitEvent,
       'claude',
       runtime.persistAgents,
+      processTranscriptLine,
     );
 
     watchTranscriptWhenReady(agentId, runtime);
@@ -213,14 +219,14 @@ export const claudeBackendProvider: AgentBackendProvider = {
         persistedAgent.id,
         terminal,
         persistedAgent.projectDir,
-        persistedAgent.jsonlFile,
+        persistedAgent.transcriptFile,
         persistedAgent.folderName,
       );
 
       runtime.agents.set(persistedAgent.id, agent);
-      runtime.knownTranscriptFiles.add(persistedAgent.jsonlFile);
+      runtime.knownTranscriptFiles.add(persistedAgent.transcriptFile);
       console.log(
-        `[Pixel Agents] Restored agent ${persistedAgent.id} → terminal "${persistedAgent.terminalName}"`,
+        `[Agent Office] Restored agent ${persistedAgent.id} → terminal "${persistedAgent.terminalName}"`,
       );
 
       maxId = Math.max(maxId, persistedAgent.id);
@@ -255,6 +261,7 @@ export const claudeBackendProvider: AgentBackendProvider = {
         runtime.emitEvent,
         'claude',
         runtime.persistAgents,
+        processTranscriptLine,
       );
     }
   },
@@ -276,6 +283,7 @@ export const claudeBackendProvider: AgentBackendProvider = {
       runtime.emitEvent,
       'claude',
       runtime.persistAgents,
+      processTranscriptLine,
     );
   },
   focusSession(agent) {

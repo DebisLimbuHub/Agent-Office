@@ -35,7 +35,7 @@ import type { LayoutWatcher } from './layoutPersistence.js';
 import { readLayoutFromFile, watchLayoutFile, writeLayoutToFile } from './layoutPersistence.js';
 import type { AgentState } from './types.js';
 
-export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
+export class AgentOfficeViewProvider implements vscode.WebviewViewProvider {
   nextAgentId = { current: 1 };
   nextTerminalIndex = { current: 1 };
   agents = new Map<number, AgentState>();
@@ -44,11 +44,11 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
   fileWatchers = new Map<number, fs.FSWatcher>();
   pollingTimers = new Map<number, ReturnType<typeof setInterval>>();
   waitingTimers = new Map<number, ReturnType<typeof setTimeout>>();
-  jsonlPollTimers = new Map<number, ReturnType<typeof setInterval>>();
+  transcriptPollTimers = new Map<number, ReturnType<typeof setInterval>>();
   permissionTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
   activeAgentId = { current: null as number | null };
-  knownJsonlFiles = new Set<string>();
+  knownTranscriptFiles = new Set<string>();
   projectScanTimer = { current: null as ReturnType<typeof setInterval> | null };
 
   defaultLayout: Record<string, unknown> | null = null;
@@ -79,12 +79,12 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
       activeAgentIdRef: this.activeAgentId,
       projectScanTimerRef: this.projectScanTimer,
       agents: this.agents,
-      knownTranscriptFiles: this.knownJsonlFiles,
+      knownTranscriptFiles: this.knownTranscriptFiles,
       fileWatchers: this.fileWatchers,
       pollingTimers: this.pollingTimers,
       waitingTimers: this.waitingTimers,
       permissionTimers: this.permissionTimers,
-      jsonlPollTimers: this.jsonlPollTimers,
+      transcriptPollTimers: this.transcriptPollTimers,
       persistAgents: this.persistAgents,
       emitEvent: this.emitBackendEvent,
     };
@@ -189,8 +189,10 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.html = getWebviewContent(webviewView.webview, this.extensionUri);
 
     webviewView.webview.onDidReceiveMessage(async (message) => {
-      if (message.type === 'openClaude') {
-        await getBackendProvider(DEFAULT_BACKEND_ID).createSession(this.hostRuntime, {
+      if (message.type === 'createSession') {
+        const backendId = (message.backendId as string) || DEFAULT_BACKEND_ID;
+        const provider = getBackendProvider(backendId as Parameters<typeof getBackendProvider>[0]);
+        await provider.createSession(this.hostRuntime, {
           folderPath: message.folderPath as string | undefined,
           bypassPermissions: message.bypassPermissions as boolean | undefined,
         });
@@ -205,7 +207,7 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
           getBackendProvider(agent.backendId).closeSession(agent);
         }
       } else if (message.type === 'saveAgentSeats') {
-        console.log(`[Pixel Agents] saveAgentSeats:`, JSON.stringify(message.seats));
+        console.log(`[Agent Office] saveAgentSeats:`, JSON.stringify(message.seats));
         this.context.workspaceState.update(WORKSPACE_KEY_AGENT_SEATS, message.seats);
       } else if (message.type === 'saveLayout') {
         this.layoutWatcher?.markOwnWrite();
@@ -234,13 +236,18 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
           });
         }
 
+        // Start discovery for all implemented providers
+        for (const provider of listBackendProviders()) {
+          if (provider.isImplemented) {
+            provider.startDiscovery(this.hostRuntime);
+          }
+        }
+
         const projectDir = getBackendProvider(DEFAULT_BACKEND_ID).getSessionsDirectory();
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         console.log('[Extension] workspaceRoot:', workspaceRoot);
         console.log('[Extension] projectDir:', projectDir);
         if (projectDir) {
-          getBackendProvider(DEFAULT_BACKEND_ID).startDiscovery(this.hostRuntime);
-
           (async () => {
             try {
               console.log('[Extension] Loading furniture assets...');
@@ -334,7 +341,13 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
         }
         sendExistingAgents(this.agents, this.context, this.webview);
       } else if (message.type === 'openSessionsFolder') {
-        const projectDir = getBackendProvider(DEFAULT_BACKEND_ID).getSessionsDirectory();
+        // Try focused agent's backend first, fall back to default
+        const focusedAgent =
+          this.activeAgentId.current !== null
+            ? this.agents.get(this.activeAgentId.current)
+            : undefined;
+        const backendId = focusedAgent?.backendId ?? DEFAULT_BACKEND_ID;
+        const projectDir = getBackendProvider(backendId).getSessionsDirectory();
         if (projectDir && fs.existsSync(projectDir)) {
           vscode.env.openExternal(vscode.Uri.file(projectDir));
         }
@@ -470,7 +483,7 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
   private startLayoutWatcher(): void {
     if (this.layoutWatcher) return;
     this.layoutWatcher = watchLayoutFile((layout) => {
-      console.log('[Pixel Agents] External layout change — pushing to webview');
+      console.log('[Agent Office] External layout change — pushing to webview');
       this.webview?.postMessage({ type: 'layoutLoaded', layout });
     });
   }
@@ -504,7 +517,7 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
               this.pollingTimers,
               this.waitingTimers,
               this.permissionTimers,
-              this.jsonlPollTimers,
+              this.transcriptPollTimers,
               this.persistAgents,
             );
             this.emitBackendEvent({ type: 'sessionClosed', agentId: id });
@@ -529,7 +542,7 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
         this.pollingTimers,
         this.waitingTimers,
         this.permissionTimers,
-        this.jsonlPollTimers,
+        this.transcriptPollTimers,
         this.persistAgents,
       );
     }

@@ -1,20 +1,20 @@
 import * as path from 'path';
 
-import type { BackendEventSink } from './backends/types.js';
 import {
   BASH_COMMAND_DISPLAY_MAX_LENGTH,
   TASK_DESCRIPTION_DISPLAY_MAX_LENGTH,
   TEXT_IDLE_DELAY_MS,
   TOOL_DONE_DELAY_MS,
-} from './constants.js';
+} from '../../constants.js';
 import {
   cancelPermissionTimer,
   cancelWaitingTimer,
   clearAgentActivity,
   startPermissionTimer,
   startWaitingTimer,
-} from './timerManager.js';
-import type { AgentState } from './types.js';
+} from '../../timerManager.js';
+import type { AgentState } from '../../types.js';
+import type { BackendEventSink } from '../types.js';
 
 export const PERMISSION_EXEMPT_TOOLS = new Set(['Task', 'Agent', 'AskUserQuestion']);
 
@@ -89,7 +89,7 @@ export function processTranscriptLine(
           if (block.type === 'tool_use' && block.id) {
             const toolName = block.name || '';
             const status = formatToolStatus(toolName, block.input || {});
-            console.log(`[Pixel Agents] Agent ${agentId} tool start: ${block.id} ${status}`);
+            console.log(`[Agent Office] Agent ${agentId} tool start: ${block.id} ${status}`);
             agent.activeToolIds.add(block.id);
             agent.activeToolStatuses.set(block.id, status);
             agent.activeToolNames.set(block.id, toolName);
@@ -130,7 +130,7 @@ export function processTranscriptLine(
         if (hasToolResult) {
           for (const block of blocks) {
             if (block.type === 'tool_result' && block.tool_use_id) {
-              console.log(`[Pixel Agents] Agent ${agentId} tool done: ${block.tool_use_id}`);
+              console.log(`[Agent Office] Agent ${agentId} tool done: ${block.tool_use_id}`);
               const completedToolId = block.tool_use_id;
               // If the completed tool was a Task/Agent, clear its subagent tools
               const completedToolName = agent.activeToolNames.get(completedToolId);
@@ -239,7 +239,7 @@ function processProgressRecord(
         const toolName = block.name || '';
         const status = formatToolStatus(toolName, block.input || {});
         console.log(
-          `[Pixel Agents] Agent ${agentId} subagent tool start: ${block.id} ${status} (parent: ${parentToolId})`,
+          `[Agent Office] Agent ${agentId} subagent tool start: ${block.id} ${status} (parent: ${parentToolId})`,
         );
 
         // Track sub-tool IDs
@@ -278,7 +278,7 @@ function processProgressRecord(
     for (const block of content) {
       if (block.type === 'tool_result' && block.tool_use_id) {
         console.log(
-          `[Pixel Agents] Agent ${agentId} subagent tool done: ${block.tool_use_id} (parent: ${parentToolId})`,
+          `[Agent Office] Agent ${agentId} subagent tool done: ${block.tool_use_id} (parent: ${parentToolId})`,
         );
 
         // Remove from tracking

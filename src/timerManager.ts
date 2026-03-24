@@ -99,7 +99,7 @@ export function startPermissionTimer(
 
     if (hasNonExempt) {
       agent.permissionSent = true;
-      console.log(`[Pixel Agents] Agent ${agentId}: possible permission wait detected`);
+      console.log(`[Agent Office] Agent ${agentId}: possible permission wait detected`);
       emitEvent({ type: 'permissionRequired', agentId });
       // Also notify stuck sub-agents
       for (const parentToolId of stuckSubagentParentToolIds) {

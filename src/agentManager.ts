@@ -14,17 +14,17 @@ export function removeAgent(
   pollingTimers: Map<number, ReturnType<typeof setInterval>>,
   waitingTimers: Map<number, ReturnType<typeof setTimeout>>,
   permissionTimers: Map<number, ReturnType<typeof setTimeout>>,
-  jsonlPollTimers: Map<number, ReturnType<typeof setInterval>>,
+  transcriptPollTimers: Map<number, ReturnType<typeof setInterval>>,
   persistAgents: () => void,
 ): void {
   const agent = agents.get(agentId);
   if (!agent) return;
 
-  const jsonlPollTimer = jsonlPollTimers.get(agentId);
-  if (jsonlPollTimer) {
-    clearInterval(jsonlPollTimer);
+  const transcriptPollTimer = transcriptPollTimers.get(agentId);
+  if (transcriptPollTimer) {
+    clearInterval(transcriptPollTimer);
   }
-  jsonlPollTimers.delete(agentId);
+  transcriptPollTimers.delete(agentId);
 
   fileWatchers.get(agentId)?.close();
   fileWatchers.delete(agentId);
@@ -36,7 +36,7 @@ export function removeAgent(
   pollingTimers.delete(agentId);
 
   try {
-    fs.unwatchFile(agent.jsonlFile);
+    fs.unwatchFile(agent.transcriptFile);
   } catch {
     /* ignore */
   }
@@ -58,7 +58,7 @@ export function persistAgents(
       id: agent.id,
       backendId: agent.backendId,
       terminalName: agent.terminalRef.name,
-      jsonlFile: agent.jsonlFile,
+      transcriptFile: agent.transcriptFile,
       projectDir: agent.projectDir,
       folderName: agent.folderName,
     });
@@ -75,7 +75,7 @@ export function loadPersistedAgents(context: vscode.ExtensionContext): Persisted
     if (
       typeof entry.id !== 'number' ||
       typeof entry.terminalName !== 'string' ||
-      typeof entry.jsonlFile !== 'string' ||
+      typeof (entry.transcriptFile ?? (entry as Record<string, unknown>).jsonlFile) !== 'string' ||
       typeof entry.projectDir !== 'string'
     ) {
       return [];
@@ -86,7 +86,8 @@ export function loadPersistedAgents(context: vscode.ExtensionContext): Persisted
         id: entry.id,
         backendId: normalizeBackendId(entry.backendId),
         terminalName: entry.terminalName,
-        jsonlFile: entry.jsonlFile,
+        transcriptFile: (entry.transcriptFile ??
+          (entry as Record<string, unknown>).jsonlFile) as string,
         projectDir: entry.projectDir,
         folderName: typeof entry.folderName === 'string' ? entry.folderName : undefined,
       },
@@ -117,7 +118,7 @@ export function sendExistingAgents(
     }
   }
   console.log(
-    `[Pixel Agents] sendExistingAgents: agents=${JSON.stringify(agentIds)}, meta=${JSON.stringify(agentMeta)}`,
+    `[Agent Office] sendExistingAgents: agents=${JSON.stringify(agentIds)}, meta=${JSON.stringify(agentMeta)}`,
   );
 
   webview.postMessage({

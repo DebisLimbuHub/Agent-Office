@@ -8,15 +8,22 @@ VS Code extension with embedded React webview: Agent Office is a pixel art works
 src/                          — Extension backend (Node.js, VS Code API)
   constants.ts                — All backend magic numbers/strings (timing, truncation, asset parsing, VS Code IDs)
   extension.ts                — Entry: activate(), deactivate()
-  PixelAgentsViewProvider.ts   — WebviewViewProvider, message dispatch, asset loading
+  AgentOfficeViewProvider.ts   — WebviewViewProvider, message dispatch, asset loading
   assetLoader.ts              — PNG parsing, sprite conversion, catalog building, default layout loading
   agentManager.ts             — Terminal lifecycle: launch, remove, restore, persist
   configPersistence.ts        — User-level config file I/O (~/.pixel-agents/config.json), external asset directories
   layoutPersistence.ts        — User-level layout file I/O (~/.pixel-agents/layout.json), migration, cross-window watching
-  fileWatcher.ts              — fs.watch + polling, readNewLines, /clear detection, terminal adoption
-  transcriptParser.ts         — JSONL parsing: tool_use/tool_result → webview messages
+  fileWatcher.ts              — Generic fs.watch + polling, readNewLines, /clear detection, terminal adoption; accepts LineProcessor callback
   timerManager.ts             — Waiting/permission timer logic
-  types.ts                    — Shared interfaces (AgentState, PersistedAgent)
+  types.ts                    — Shared interfaces (AgentState, PersistedAgent, BackendId)
+  backends/
+    types.ts                  — AgentBackendProvider interface, BackendEvent, BackendHostRuntime
+    index.ts                  — Provider registry, DEFAULT_BACKEND_ID, getBackendProvider()
+    claude/
+      provider.ts             — Claude Code backend: terminal launch, JSONL discovery, session lifecycle
+      transcriptParser.ts     — Claude-specific JSONL parsing: tool_use/tool_result → BackendEvents
+    codex/
+      provider.ts             — Codex backend stub (isImplemented: false)
 
 webview-ui/src/               — React + TypeScript (Vite)
   constants.ts                — All webview magic numbers/strings (grid, animation, rendering, camera, zoom, editor, game logic, notification sound)
@@ -74,11 +81,13 @@ scripts/                      — 7-stage asset extraction pipeline
 
 **Vocabulary**: Terminal = VS Code terminal running the current backend. Session = JSONL conversation file. Agent = webview character bound 1:1 to a terminal.
 
-**Extension ↔ Webview**: `postMessage` protocol. Key messages: `openClaude`, `agentCreated/Closed`, `focusAgent`, `agentToolStart/Done/Clear`, `agentStatus`, `existingAgents`, `layoutLoaded`, `furnitureAssetsLoaded`, `floorTilesLoaded`, `wallTilesLoaded`, `saveLayout`, `saveAgentSeats`, `exportLayout`, `importLayout`, `settingsLoaded` (includes `externalAssetDirectories`), `setSoundEnabled`, `addExternalAssetDirectory`, `removeExternalAssetDirectory` (field: `path`), `externalAssetDirectoriesUpdated` (field: `dirs`).
+**Extension ↔ Webview**: `postMessage` protocol. Key messages: `createSession` (optional `backendId`), `agentCreated/Closed`, `focusAgent`, `agentToolStart/Done/Clear`, `agentStatus`, `existingAgents`, `layoutLoaded`, `furnitureAssetsLoaded`, `floorTilesLoaded`, `wallTilesLoaded`, `saveLayout`, `saveAgentSeats`, `exportLayout`, `importLayout`, `settingsLoaded` (includes `externalAssetDirectories`), `setSoundEnabled`, `addExternalAssetDirectory`, `removeExternalAssetDirectory` (field: `path`), `externalAssetDirectoriesUpdated` (field: `dirs`).
 
 **One-agent-per-terminal**: Each "+ Agent" click → new terminal (currently `claude --session-id <uuid>`) → immediate agent creation → 1s poll for `<uuid>.jsonl` → file watching starts.
 
 **Terminal adoption**: Project-level 1s scan detects unknown JSONL files. If active terminal has no agent → adopt. If focused agent exists → reassign (`/clear` handling).
+
+**Backend abstraction**: `AgentBackendProvider` interface (`backends/types.ts`) defines session lifecycle: `createSession`, `restoreSessions`, `startDiscovery`, `focusSession`, `closeSession`, `getSessionsDirectory`. Providers emit `BackendEvent`s via a sink callback; `AgentOfficeViewProvider.emitBackendEvent()` translates them to webview messages. `BackendHostRuntime` provides shared state (agents map, timer maps, file watcher maps). Claude provider (`backends/claude/`) owns transcript parsing (`transcriptParser.ts`) and passes its `processTranscriptLine` as a `LineProcessor` callback to the generic `fileWatcher.ts`. Codex provider (`backends/codex/`) is scaffolded but not yet implemented. `createSession` message accepts optional `backendId` (defaults to `DEFAULT_BACKEND_ID`). Discovery runs for all implemented providers on webview ready.
 
 ## Agent Status Tracking
 
@@ -88,7 +97,7 @@ JSONL transcripts at `~/.claude/projects/<project-hash>/<session-id>.jsonl`. Pro
 
 **File watching**: Hybrid `fs.watch` + 2s polling backup. Partial line buffering for mid-write reads. Tool done messages delayed 300ms to prevent flicker.
 
-**Extension state per agent**: `id, terminalRef, projectDir, jsonlFile, fileOffset, lineBuffer, activeToolIds, activeToolStatuses, activeSubagentToolNames, isWaiting`.
+**Extension state per agent**: `id, backendId, terminalRef, projectDir, transcriptFile, fileOffset, lineBuffer, activeToolIds, activeToolStatuses, activeSubagentToolNames, isWaiting`.
 
 **Persistence**: Agents persisted to `workspaceState` key `'pixel-agents.agents'` (includes palette/hueShift/seatId). **Layout persisted to `~/.pixel-agents/layout.json`** (user-level, shared across all VS Code windows/workspaces). `layoutPersistence.ts` handles all file I/O: `readLayoutFromFile()`, `writeLayoutToFile()` (atomic via `.tmp` + rename), `migrateAndLoadLayout()` (checks file → migrates old workspace state → falls back to bundled default), `watchLayoutFile()` (hybrid `fs.watch` + 2s polling for cross-window sync). On save, `markOwnWrite()` prevents the watcher from re-reading our own write. External changes push `layoutLoaded` to the webview; skipped if the editor has unsaved changes (last-save-wins). On webview ready: `restoreAgents()` matches persisted entries to live terminals. `nextAgentId`/`nextTerminalIndex` advanced past restored values. **Default layout**: When no saved layout file exists and no workspace state to migrate, a bundled `default-layout.json` is loaded from `assets/` and written to the file. If that also doesn't exist, `createDefaultLayout()` generates a basic office. To update the default: run "Pixel Agents: Export Layout as Default" from the command palette (writes current layout to `webview-ui/public/assets/default-layout.json`), then rebuild. **Export/Import**: Settings modal offers Export Layout (save dialog → JSON file) and Import Layout (open dialog → validates `version: 1` + `tiles` array → writes to layout file + pushes `layoutLoaded` to webview). **Config persisted to `~/.pixel-agents/config.json`** (user-level, shared across windows). `configPersistence.ts` handles read/write with atomic tmp+rename. Currently stores `externalAssetDirectories: string[]` for external asset pack paths. **External asset directories**: Settings modal offers Add/Remove Asset Directory. External furniture merged with bundled assets on boot and on add/remove via `mergeLoadedAssets()` (external IDs override bundled on collision).
 

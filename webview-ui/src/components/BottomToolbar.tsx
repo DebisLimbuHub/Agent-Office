@@ -6,7 +6,7 @@ import { SettingsModal } from './SettingsModal.js';
 
 interface BottomToolbarProps {
   isEditMode: boolean;
-  onOpenClaude: () => void;
+  onCreateSession: () => void;
   onToggleEditMode: () => void;
   isDebugMode: boolean;
   onToggleDebugMode: () => void;
@@ -49,7 +49,7 @@ const btnActive: React.CSSProperties = {
 
 export function BottomToolbar({
   isEditMode,
-  onOpenClaude,
+  onCreateSession,
   onToggleEditMode,
   isDebugMode,
   onToggleDebugMode,
@@ -88,7 +88,7 @@ export function BottomToolbar({
     if (hasMultipleFolders) {
       setIsFolderPickerOpen((v) => !v);
     } else {
-      onOpenClaude();
+      onCreateSession();
     }
   };
 
@@ -102,7 +102,7 @@ export function BottomToolbar({
     setIsFolderPickerOpen(false);
     const bypassPermissions = pendingBypassRef.current;
     pendingBypassRef.current = false;
-    vscode.postMessage({ type: 'openClaude', folderPath: folder.path, bypassPermissions });
+    vscode.postMessage({ type: 'createSession', folderPath: folder.path, bypassPermissions });
   };
 
   const handleBypassSelect = (bypassPermissions: boolean) => {
@@ -111,7 +111,7 @@ export function BottomToolbar({
       pendingBypassRef.current = bypassPermissions;
       setIsFolderPickerOpen(true);
     } else {
-      vscode.postMessage({ type: 'openClaude', bypassPermissions });
+      vscode.postMessage({ type: 'createSession', bypassPermissions });
     }
   };
 

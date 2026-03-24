@@ -79,7 +79,7 @@ export interface BackendHostRuntime {
   pollingTimers: Map<number, ReturnType<typeof setInterval>>;
   waitingTimers: Map<number, ReturnType<typeof setTimeout>>;
   permissionTimers: Map<number, ReturnType<typeof setTimeout>>;
-  jsonlPollTimers: Map<number, ReturnType<typeof setInterval>>;
+  transcriptPollTimers: Map<number, ReturnType<typeof setInterval>>;
   persistAgents: () => void;
   emitEvent: BackendEventSink;
 }

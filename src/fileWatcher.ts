@@ -5,8 +5,17 @@ import * as vscode from 'vscode';
 import type { BackendEventSink } from './backends/types.js';
 import { FILE_WATCHER_POLL_INTERVAL_MS, PROJECT_SCAN_INTERVAL_MS } from './constants.js';
 import { cancelPermissionTimer, cancelWaitingTimer, clearAgentActivity } from './timerManager.js';
-import { processTranscriptLine } from './transcriptParser.js';
 import type { AgentState, BackendId } from './types.js';
+
+/** Backend-specific callback that parses a single transcript line and emits events. */
+export type LineProcessor = (
+  agentId: number,
+  line: string,
+  agents: Map<number, AgentState>,
+  waitingTimers: Map<number, ReturnType<typeof setTimeout>>,
+  permissionTimers: Map<number, ReturnType<typeof setTimeout>>,
+  emitEvent: BackendEventSink,
+) => void;
 
 export function startFileWatching(
   agentId: number,
@@ -17,24 +26,25 @@ export function startFileWatching(
   waitingTimers: Map<number, ReturnType<typeof setTimeout>>,
   permissionTimers: Map<number, ReturnType<typeof setTimeout>>,
   emitEvent: BackendEventSink,
+  processLine: LineProcessor,
 ): void {
   // Primary: fs.watch (unreliable on macOS — may miss events)
   try {
     const watcher = fs.watch(filePath, () => {
-      readNewLines(agentId, agents, waitingTimers, permissionTimers, emitEvent);
+      readNewLines(agentId, agents, waitingTimers, permissionTimers, emitEvent, processLine);
     });
     fileWatchers.set(agentId, watcher);
   } catch (e) {
-    console.log(`[Pixel Agents] fs.watch failed for agent ${agentId}: ${e}`);
+    console.log(`[Agent Office] fs.watch failed for agent ${agentId}: ${e}`);
   }
 
   // Secondary: fs.watchFile (stat-based polling, reliable on macOS)
   try {
     fs.watchFile(filePath, { interval: FILE_WATCHER_POLL_INTERVAL_MS }, () => {
-      readNewLines(agentId, agents, waitingTimers, permissionTimers, emitEvent);
+      readNewLines(agentId, agents, waitingTimers, permissionTimers, emitEvent, processLine);
     });
   } catch (e) {
-    console.log(`[Pixel Agents] fs.watchFile failed for agent ${agentId}: ${e}`);
+    console.log(`[Agent Office] fs.watchFile failed for agent ${agentId}: ${e}`);
   }
 
   // Tertiary: manual poll as last resort
@@ -48,7 +58,7 @@ export function startFileWatching(
       }
       return;
     }
-    readNewLines(agentId, agents, waitingTimers, permissionTimers, emitEvent);
+    readNewLines(agentId, agents, waitingTimers, permissionTimers, emitEvent, processLine);
   }, FILE_WATCHER_POLL_INTERVAL_MS);
   pollingTimers.set(agentId, interval);
 }
@@ -59,15 +69,16 @@ export function readNewLines(
   waitingTimers: Map<number, ReturnType<typeof setTimeout>>,
   permissionTimers: Map<number, ReturnType<typeof setTimeout>>,
   emitEvent: BackendEventSink,
+  processLine: LineProcessor,
 ): void {
   const agent = agents.get(agentId);
   if (!agent) return;
   try {
-    const stat = fs.statSync(agent.jsonlFile);
+    const stat = fs.statSync(agent.transcriptFile);
     if (stat.size <= agent.fileOffset) return;
 
     const buf = Buffer.alloc(stat.size - agent.fileOffset);
-    const fd = fs.openSync(agent.jsonlFile, 'r');
+    const fd = fs.openSync(agent.transcriptFile, 'r');
     fs.readSync(fd, buf, 0, buf.length, agent.fileOffset);
     fs.closeSync(fd);
     agent.fileOffset = stat.size;
@@ -89,16 +100,16 @@ export function readNewLines(
 
     for (const line of lines) {
       if (!line.trim()) continue;
-      processTranscriptLine(agentId, line, agents, waitingTimers, permissionTimers, emitEvent);
+      processLine(agentId, line, agents, waitingTimers, permissionTimers, emitEvent);
     }
   } catch (e) {
-    console.log(`[Pixel Agents] Read error for agent ${agentId}: ${e}`);
+    console.log(`[Agent Office] Read error for agent ${agentId}: ${e}`);
   }
 }
 
 export function ensureProjectScan(
   projectDir: string,
-  knownJsonlFiles: Set<string>,
+  knownTranscriptFiles: Set<string>,
   projectScanTimerRef: { current: ReturnType<typeof setInterval> | null },
   activeAgentIdRef: { current: number | null },
   nextAgentIdRef: { current: number },
@@ -110,25 +121,26 @@ export function ensureProjectScan(
   emitEvent: BackendEventSink,
   backendId: BackendId,
   persistAgents: () => void,
+  processLine: LineProcessor,
 ): void {
   if (projectScanTimerRef.current) return;
-  // Seed with all existing JSONL files so we only react to truly new ones
+  // Seed with all existing transcript files so we only react to truly new ones
   try {
     const files = fs
       .readdirSync(projectDir)
       .filter((f) => f.endsWith('.jsonl'))
       .map((f) => path.join(projectDir, f));
     for (const f of files) {
-      knownJsonlFiles.add(f);
+      knownTranscriptFiles.add(f);
     }
   } catch {
     /* dir may not exist yet */
   }
 
   projectScanTimerRef.current = setInterval(() => {
-    scanForNewJsonlFiles(
+    scanForNewTranscriptFiles(
       projectDir,
-      knownJsonlFiles,
+      knownTranscriptFiles,
       activeAgentIdRef,
       nextAgentIdRef,
       agents,
@@ -139,13 +151,14 @@ export function ensureProjectScan(
       emitEvent,
       backendId,
       persistAgents,
+      processLine,
     );
   }, PROJECT_SCAN_INTERVAL_MS);
 }
 
-function scanForNewJsonlFiles(
+function scanForNewTranscriptFiles(
   projectDir: string,
-  knownJsonlFiles: Set<string>,
+  knownTranscriptFiles: Set<string>,
   activeAgentIdRef: { current: number | null },
   nextAgentIdRef: { current: number },
   agents: Map<number, AgentState>,
@@ -156,6 +169,7 @@ function scanForNewJsonlFiles(
   emitEvent: BackendEventSink,
   backendId: BackendId,
   persistAgents: () => void,
+  processLine: LineProcessor,
 ): void {
   let files: string[];
   try {
@@ -168,12 +182,12 @@ function scanForNewJsonlFiles(
   }
 
   for (const file of files) {
-    if (!knownJsonlFiles.has(file)) {
-      knownJsonlFiles.add(file);
+    if (!knownTranscriptFiles.has(file)) {
+      knownTranscriptFiles.add(file);
       if (activeAgentIdRef.current !== null) {
         // Active agent focused → /clear reassignment
         console.log(
-          `[Pixel Agents] New JSONL detected: ${path.basename(file)}, reassigning to agent ${activeAgentIdRef.current}`,
+          `[Agent Office] New transcript detected: ${path.basename(file)}, reassigning to agent ${activeAgentIdRef.current}`,
         );
         reassignAgentToFile(
           activeAgentIdRef.current,
@@ -185,6 +199,7 @@ function scanForNewJsonlFiles(
           permissionTimers,
           emitEvent,
           persistAgents,
+          processLine,
         );
       } else {
         // No active agent → try to adopt the focused terminal
@@ -212,6 +227,7 @@ function scanForNewJsonlFiles(
               emitEvent,
               backendId,
               persistAgents,
+              processLine,
             );
           }
         }
@@ -222,7 +238,7 @@ function scanForNewJsonlFiles(
 
 function adoptTerminalForFile(
   terminal: vscode.Terminal,
-  jsonlFile: string,
+  transcriptFile: string,
   projectDir: string,
   nextAgentIdRef: { current: number },
   agents: Map<number, AgentState>,
@@ -234,6 +250,7 @@ function adoptTerminalForFile(
   emitEvent: BackendEventSink,
   backendId: BackendId,
   persistAgents: () => void,
+  processLine: LineProcessor,
 ): void {
   const id = nextAgentIdRef.current++;
   const agent: AgentState = {
@@ -241,7 +258,7 @@ function adoptTerminalForFile(
     backendId,
     terminalRef: terminal,
     projectDir,
-    jsonlFile,
+    transcriptFile,
     fileOffset: 0,
     lineBuffer: '',
     activeToolIds: new Set(),
@@ -259,21 +276,22 @@ function adoptTerminalForFile(
   persistAgents();
 
   console.log(
-    `[Pixel Agents] Agent ${id}: adopted terminal "${terminal.name}" for ${path.basename(jsonlFile)}`,
+    `[Agent Office] Agent ${id}: adopted terminal "${terminal.name}" for ${path.basename(transcriptFile)}`,
   );
   emitEvent({ type: 'sessionCreated', agentId: id });
 
   startFileWatching(
     id,
-    jsonlFile,
+    transcriptFile,
     agents,
     fileWatchers,
     pollingTimers,
     waitingTimers,
     permissionTimers,
     emitEvent,
+    processLine,
   );
-  readNewLines(id, agents, waitingTimers, permissionTimers, emitEvent);
+  readNewLines(id, agents, waitingTimers, permissionTimers, emitEvent, processLine);
 }
 
 export function reassignAgentToFile(
@@ -286,6 +304,7 @@ export function reassignAgentToFile(
   permissionTimers: Map<number, ReturnType<typeof setTimeout>>,
   emitEvent: BackendEventSink,
   persistAgents: () => void,
+  processLine: LineProcessor,
 ): void {
   const agent = agents.get(agentId);
   if (!agent) return;
@@ -299,7 +318,7 @@ export function reassignAgentToFile(
   }
   pollingTimers.delete(agentId);
   try {
-    fs.unwatchFile(agent.jsonlFile);
+    fs.unwatchFile(agent.transcriptFile);
   } catch {
     /* ignore */
   }
@@ -310,7 +329,7 @@ export function reassignAgentToFile(
   clearAgentActivity(agent, agentId, permissionTimers, emitEvent);
 
   // Swap to new file
-  agent.jsonlFile = newFilePath;
+  agent.transcriptFile = newFilePath;
   agent.fileOffset = 0;
   agent.lineBuffer = '';
   persistAgents();
@@ -325,6 +344,7 @@ export function reassignAgentToFile(
     waitingTimers,
     permissionTimers,
     emitEvent,
+    processLine,
   );
-  readNewLines(agentId, agents, waitingTimers, permissionTimers, emitEvent);
+  readNewLines(agentId, agents, waitingTimers, permissionTimers, emitEvent, processLine);
 }
