@@ -65,6 +65,8 @@ npm run build
 
 Then press **F5** in VS Code to launch the Extension Development Host.
 
+For a headless smoke check on Linux, run `npm run smoke:vscode`. It launches an isolated VS Code instance under Xvfb with its own temporary `--user-data-dir`, opens **Agent Office: Show Panel**, captures a screenshot, and only cleans up processes tied to that temporary root.
+
 ### Usage
 
 1. Open the **Agent Office** panel (it appears in the bottom panel area alongside your terminal)

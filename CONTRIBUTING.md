@@ -23,6 +23,8 @@ npm run build
 
 Then press **F5** in VS Code to launch the Extension Development Host.
 
+For an automated Linux smoke check, run `npm run smoke:vscode`. The helper starts an isolated VS Code instance under Xvfb, opens **Agent Office: Show Panel**, writes artifacts to a temporary directory under `/tmp`, and only terminates processes associated with that temporary `--user-data-dir`.
+
 ## Development Workflow
 
 For development with live rebuilds, run:

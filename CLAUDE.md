@@ -186,6 +186,7 @@ Toggle via "Layout" button. Tools: SELECT (default), Floor paint, Wall paint, Er
 npm install && cd webview-ui && npm install && cd .. && npm run build
 ```
 Build: type-check → lint → esbuild (extension) → vite (webview). F5 for Extension Dev Host.
+For automated Linux smoke checks, use `npm run smoke:vscode`. It launches VS Code with a dedicated temporary `--user-data-dir` under Xvfb and only cleans up processes tied to that temp root. Do not use broad `pkill` patterns against `code`.
 
 ## TypeScript Constraints
 
