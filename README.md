@@ -9,11 +9,13 @@
 [![stars](https://img.shields.io/github/stars/DebisLimbuHub/Agent-Office?logo=github&color=0183ff&style=flat)](https://github.com/DebisLimbuHub/Agent-Office/stargazers)
 [![license](https://img.shields.io/github/license/DebisLimbuHub/Agent-Office?color=0183ff&style=flat)](https://github.com/DebisLimbuHub/Agent-Office/blob/main/LICENSE)
 [![issues](https://img.shields.io/github/issues/DebisLimbuHub/Agent-Office?color=7057ff)](https://github.com/DebisLimbuHub/Agent-Office/issues)
+[![release](https://img.shields.io/github/v/release/DebisLimbuHub/Agent-Office?display_name=tag&color=2ea44f)](https://github.com/DebisLimbuHub/Agent-Office/releases/latest)
+[![download latest vsix](https://img.shields.io/badge/Download-Latest%20VSIX-2ea44f?style=flat)](https://github.com/DebisLimbuHub/Agent-Office/releases/latest)
 
 </div>
 
 <div align="center">
-<a href="https://marketplace.visualstudio.com/items?itemName=pablodelucca.pixel-agents">VS Code Marketplace</a> • <a href="https://github.com/DebisLimbuHub/Agent-Office/discussions">Discussions</a> • <a href="https://github.com/DebisLimbuHub/Agent-Office/issues">Issues</a> • <a href="CONTRIBUTING.md">Contributing</a> • <a href="CHANGELOG.md">Changelog</a>
+<a href="https://marketplace.visualstudio.com/items?itemName=pablodelucca.pixel-agents">VS Code Marketplace</a> • <a href="https://github.com/DebisLimbuHub/Agent-Office/releases/latest">Download Latest VSIX</a> • <a href="https://github.com/DebisLimbuHub/Agent-Office/discussions">Discussions</a> • <a href="https://github.com/DebisLimbuHub/Agent-Office/issues">Issues</a> • <a href="CONTRIBUTING.md">Contributing</a> • <a href="CHANGELOG.md">Changelog</a>
 </div>
 
 <br/>
@@ -22,7 +24,19 @@ Agent Office turns multi-agent AI systems into something you can actually see an
 
 Right now it works as a VS Code extension with built-in Codex CLI and Claude Code backends. Codex is the default built-in path, but the long-term vision is a fully agent-agnostic, platform-agnostic interface for orchestrating any AI agents, deployable anywhere.
 
-This is the source code for the Agent Office VS Code extension. During this first-pass rebrand, the published package identifiers still use the original `pixel-agents` name for compatibility: [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=pablodelucca.pixel-agents) and [Open VSX](https://open-vsx.org/extension/pablodelucca/pixel-agents).
+This is the source code for the Agent Office VS Code extension. Agent Office is a fork and rebrand of the original `pixel-agents` project by Pablo De Lucca. During this first-pass rebrand, the published package identifiers still use the original `pixel-agents` name for compatibility: [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=pablodelucca.pixel-agents) and [Open VSX](https://open-vsx.org/extension/pablodelucca/pixel-agents).
+
+## Quick Install
+
+To download from GitHub:
+
+1. Click **Download Latest VSIX** above, or open the [latest release](https://github.com/DebisLimbuHub/Agent-Office/releases/latest)
+2. In the release page, under **Assets**, download the `.vsix` file
+3. In VS Code, open the Command Palette and run **Extensions: Install from VSIX...**
+4. Select the downloaded `.vsix` file
+5. Reload VS Code when prompted
+
+If you prefer, you can also install it directly from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=pablodelucca.pixel-agents).
 
 ![Agent Office screenshot](webview-ui/public/Screenshot.jpg)
 
@@ -55,12 +69,12 @@ If you just want to use Agent Office, the easiest way is to download the [VS Cod
 
 ### Install from GitHub Releases
 
-If you want people to install the extension directly from GitHub instead of cloning the source code, publish a GitHub Release with the packaged `.vsix` file attached. This repository is now set up so every published GitHub Release can attach that `.vsix` automatically.
+If you want people to install the extension directly from GitHub instead of cloning the source code, publish a GitHub Release with the packaged `.vsix` file attached. This repository is set up so every published GitHub Release can attach that `.vsix` automatically.
 
 Users can then:
 
-1. Open the repo's **Releases** page
-2. Download the latest `.vsix` asset
+1. Open the repo's [latest release](https://github.com/DebisLimbuHub/Agent-Office/releases/latest)
+2. Under **Assets**, download the latest `.vsix` file
 3. In VS Code, run **Extensions: Install from VSIX...**
 4. Select the downloaded file and reload VS Code
 
