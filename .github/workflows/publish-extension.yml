@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Package without publishing'
+        description: 'Package without publishing to marketplaces'
         type: boolean
         default: false
 
@@ -20,6 +20,9 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      OPEN_VSX_TOKEN: ${{ secrets.OPEN_VSX_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -43,26 +46,42 @@ jobs:
       - name: Check types and lint
         run: npm run check-types && npm run lint
 
+      - name: Resolve VSIX path
+        id: vsix
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "path=agent-office-v${version}.vsix" >> "$GITHUB_OUTPUT"
+
+      - name: Package VSIX
+        run: npx --yes @vscode/vsce package -o "${{ steps.vsix.outputs.path }}"
+
+      - name: Upload VSIX artifact
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.vsix.outputs.path }}
+          path: ${{ steps.vsix.outputs.path }}
+
       - name: Publish to VS Code Marketplace
-        id: publish-vscode
+        if: ${{ env.VSCE_PAT != '' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
         uses: HaaLeo/publish-vscode-extension@v2
         with:
-          pat: ${{ secrets.VSCE_PAT }}
+          pat: ${{ env.VSCE_PAT }}
           registryUrl: https://marketplace.visualstudio.com
+          extensionFile: ${{ steps.vsix.outputs.path }}
           skipDuplicate: true
-          dryRun: ${{ inputs.dry_run == 'true' }}
 
       - name: Publish to Open VSX
+        if: ${{ env.OPEN_VSX_TOKEN != '' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
         uses: HaaLeo/publish-vscode-extension@v2
         with:
-          pat: ${{ secrets.OPEN_VSX_TOKEN }}
+          pat: ${{ env.OPEN_VSX_TOKEN }}
           registryUrl: https://open-vsx.org
-          extensionFile: ${{ steps.publish-vscode.outputs.vsixPath }}
+          extensionFile: ${{ steps.vsix.outputs.path }}
           skipDuplicate: true
-          dryRun: ${{ inputs.dry_run == 'true' }}
 
       - name: Upload VSIX to Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.publish-vscode.outputs.vsixPath }}
+          files: ${{ steps.vsix.outputs.path }}

@@ -53,6 +53,19 @@ Today, the built-in providers are Codex CLI and Claude Code. Codex is the defaul
 
 If you just want to use Agent Office, the easiest way is to download the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=pablodelucca.pixel-agents). If you want to play with the code, develop, or contribute, then:
 
+### Install from GitHub Releases
+
+If you want people to install the extension directly from GitHub instead of cloning the source code, publish a GitHub Release with the packaged `.vsix` file attached. This repository is now set up so every published GitHub Release can attach that `.vsix` automatically.
+
+Users can then:
+
+1. Open the repo's **Releases** page
+2. Download the latest `.vsix` asset
+3. In VS Code, run **Extensions: Install from VSIX...**
+4. Select the downloaded file and reload VS Code
+
+Downloading the repository source code is mainly for development. Normal users should install either from the VS Code Marketplace or from a release `.vsix`.
+
 ### Install from source
 
 ```bash
@@ -66,6 +79,23 @@ npm run build
 Then press **F5** in VS Code to launch the Extension Development Host.
 
 For a headless smoke check on Linux, run `npm run smoke:vscode`. It launches an isolated VS Code instance under Xvfb with its own temporary `--user-data-dir`, opens **Agent Office: Show Panel**, captures a screenshot, and only cleans up processes tied to that temporary root.
+
+## Releasing on GitHub
+
+This repository already includes a GitHub Actions workflow at `.github/workflows/publish-extension.yml` that packages the extension, uploads the generated `.vsix` file to the GitHub Release, and optionally publishes to the marketplaces when the required tokens are configured.
+
+To make GitHub downloads work for end users:
+
+1. Bump the version in `package.json`
+2. Create and publish a GitHub Release
+3. Let the workflow attach the built `.vsix` file to that release
+
+If you also want automatic marketplace publishing:
+
+1. Add the repository secret `VSCE_PAT` for the Visual Studio Marketplace publisher account
+2. Add the repository secret `OPEN_VSX_TOKEN` for the Open VSX publisher account
+
+After that, users can install from either the Marketplace link or the GitHub Release asset. You can also run the workflow manually with `dry_run` enabled to build a `.vsix` and download it from the Actions artifact without publishing it anywhere.
 
 ### Usage
 
