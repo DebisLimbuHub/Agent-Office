@@ -35,10 +35,11 @@ The easiest install path for most users is the [VS Code Marketplace](https://mar
 If you want to install directly from GitHub instead:
 
 1. Click **Download Latest VSIX** above, or open the [latest release](https://github.com/DebisLimbuHub/Agent-Office/releases/latest)
-2. Under **Assets**, download the latest `.vsix` file
-3. In VS Code, open the Command Palette and run **Extensions: Install from VSIX...**
-4. Select the downloaded `.vsix` file
-5. Reload VS Code when prompted
+2. Under **Assets**, click the file that ends in `.vsix`, such as `agent-office-v1.1.2.vsix`
+3. Do not download `Source code (zip)` or `Source code (tar.gz)` if you want the VS Code extension package
+4. In VS Code, open the Command Palette and run **Extensions: Install from VSIX...**
+5. Select the downloaded `.vsix` file
+6. Reload VS Code when prompted
 
 ## Requirements
 
