@@ -31,6 +31,7 @@ import type {
   TileType as TileTypeVal,
 } from '../types.js';
 import { CharacterState, Direction, MATRIX_EFFECT_DURATION, TILE_SIZE } from '../types.js';
+import { findClosestAvailableWorkSeat, isWorkSeat } from '../workSeats.js';
 import { createCharacter, updateCharacter } from './characters.js';
 import { matrixEffectSeeds } from './matrixEffect.js';
 
@@ -179,6 +180,21 @@ export class OfficeState {
       if (!seat.assigned) return uid;
     }
     return null;
+  }
+
+  private findPreferredActiveSeat(ch: Character): string | null {
+    const currentSeat = ch.seatId ? this.seats.get(ch.seatId) : null;
+    if (currentSeat && isWorkSeat(currentSeat, this.layout.furniture)) {
+      return ch.seatId;
+    }
+
+    return findClosestAvailableWorkSeat(
+      this.seats,
+      this.layout.furniture,
+      ch.tileCol,
+      ch.tileRow,
+      ch.seatId,
+    );
   }
 
   /**
@@ -520,7 +536,12 @@ export class OfficeState {
     const ch = this.characters.get(id);
     if (ch) {
       ch.isActive = active;
-      if (!active) {
+      if (active) {
+        const preferredSeatId = this.findPreferredActiveSeat(ch);
+        if (preferredSeatId && preferredSeatId !== ch.seatId) {
+          this.reassignSeat(id, preferredSeatId);
+        }
+      } else {
         // Sentinel -1: signals turn just ended, skip next seat rest timer.
         // Prevents the WALK handler from setting a 2-4 min rest on arrival.
         ch.seatTimer = -1;

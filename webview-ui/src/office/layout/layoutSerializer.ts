@@ -158,6 +158,22 @@ function orientationToFacing(orientation: string): Direction {
   }
 }
 
+function getDeskFootprint(type: string): { w: number; h: number } | null {
+  const entry = getCatalogEntry(type);
+  if (entry?.isDesk) {
+    return { w: entry.footprintW, h: entry.footprintH };
+  }
+
+  if (type === 'DESK_FRONT') {
+    return { w: 3, h: 2 };
+  }
+  if (type === 'DESK_SIDE' || type === 'DESK_SIDE:left') {
+    return { w: 1, h: 4 };
+  }
+
+  return null;
+}
+
 /** Generate seats from chair furniture.
  *  Facing priority: 1) chair orientation, 2) adjacent desk, 3) forward (DOWN). */
 export function layoutToSeats(furniture: PlacedFurniture[]): Map<string, Seat> {
@@ -166,10 +182,10 @@ export function layoutToSeats(furniture: PlacedFurniture[]): Map<string, Seat> {
   // Build set of all desk tiles
   const deskTiles = new Set<string>();
   for (const item of furniture) {
-    const entry = getCatalogEntry(item.type);
-    if (!entry || !entry.isDesk) continue;
-    for (let dr = 0; dr < entry.footprintH; dr++) {
-      for (let dc = 0; dc < entry.footprintW; dc++) {
+    const footprint = getDeskFootprint(item.type);
+    if (!footprint) continue;
+    for (let dr = 0; dr < footprint.h; dr++) {
+      for (let dc = 0; dc < footprint.w; dc++) {
         deskTiles.add(`${item.col + dc},${item.row + dr}`);
       }
     }

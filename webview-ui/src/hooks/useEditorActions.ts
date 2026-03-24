@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 
-import { LAYOUT_SAVE_DEBOUNCE_MS, ZOOM_MAX, ZOOM_MIN } from '../constants.js';
+import { LAYOUT_SAVE_DEBOUNCE_MS, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from '../constants.js';
 import type { ExpandDirection } from '../office/editor/editorActions.js';
 import {
   canPlaceFurniture,
@@ -366,7 +366,8 @@ export function useEditorActions(
   }, []);
 
   const handleZoomChange = useCallback((newZoom: number) => {
-    setZoom(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom)));
+    const snappedZoom = Math.round(newZoom / ZOOM_STEP) * ZOOM_STEP;
+    setZoom(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, snappedZoom)));
   }, []);
 
   const handleDragMove = useCallback(

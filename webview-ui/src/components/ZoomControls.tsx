@@ -6,6 +6,7 @@ import {
   ZOOM_LEVEL_HIDE_DELAY_MS,
   ZOOM_MAX,
   ZOOM_MIN,
+  ZOOM_STEP,
 } from '../constants.js';
 
 interface ZoomControlsProps {
@@ -38,6 +39,7 @@ export function ZoomControls({ zoom, onZoomChange }: ZoomControlsProps) {
 
   const minDisabled = zoom <= ZOOM_MIN;
   const maxDisabled = zoom >= ZOOM_MAX;
+  const zoomLabel = Number(zoom.toFixed(2)).toString();
 
   // Show zoom level briefly when zoom changes
   useEffect(() => {
@@ -92,7 +94,7 @@ export function ZoomControls({ zoom, onZoomChange }: ZoomControlsProps) {
             pointerEvents: 'none',
           }}
         >
-          {zoom}x
+          {zoomLabel}x
         </div>
       )}
 
@@ -109,7 +111,7 @@ export function ZoomControls({ zoom, onZoomChange }: ZoomControlsProps) {
         }}
       >
         <button
-          onClick={() => onZoomChange(zoom + 1)}
+          onClick={() => onZoomChange(zoom + ZOOM_STEP)}
           disabled={maxDisabled}
           onMouseEnter={() => setHovered('plus')}
           onMouseLeave={() => setHovered(null)}
@@ -144,7 +146,7 @@ export function ZoomControls({ zoom, onZoomChange }: ZoomControlsProps) {
           </svg>
         </button>
         <button
-          onClick={() => onZoomChange(zoom - 1)}
+          onClick={() => onZoomChange(zoom - ZOOM_STEP)}
           disabled={minDisabled}
           onMouseEnter={() => setHovered('minus')}
           onMouseLeave={() => setHovered(null)}
