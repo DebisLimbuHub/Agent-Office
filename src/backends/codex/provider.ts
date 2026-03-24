@@ -7,11 +7,20 @@ import { readNewLines, reassignAgentToFile, startFileWatching } from '../../file
 import type { AgentState, PersistedAgent } from '../../types.js';
 import type { AgentBackendProvider, BackendHostRuntime, CreateSessionOptions } from '../types.js';
 import {
+  canAdoptActiveTerminal,
+  findExistingCodexAgentBySessionId,
+  findPendingCodexAgentForSession,
+  shouldAttachCodexTranscript,
+} from './discovery.js';
+import {
+  type CodexSessionMeta,
   getCodexSessionsDirectory,
+  isCodexSubagentSession,
   isTopLevelCodexSession,
   listCodexSessionFiles,
   readCodexSessionMeta,
 } from './sessionStore.js';
+import { attachDiscoveredCodexSubagent } from './subagentTracker.js';
 import { processTranscriptLine } from './transcriptParser.js';
 
 function createCodexAgentState(
@@ -20,6 +29,8 @@ function createCodexAgentState(
   projectDir: string,
   transcriptFile: string,
   folderName?: string,
+  backendSessionId?: string,
+  pendingSession = false,
 ): AgentState {
   return {
     id,
@@ -27,11 +38,14 @@ function createCodexAgentState(
     terminalRef: terminal,
     projectDir,
     transcriptFile,
+    backendSessionId,
+    pendingSession,
     fileOffset: 0,
     lineBuffer: '',
     activeToolIds: new Set(),
     activeToolStatuses: new Map(),
     activeToolNames: new Map(),
+    activeToolInputs: new Map(),
     activeSubagentToolIds: new Map(),
     activeSubagentToolNames: new Map(),
     isWaiting: false,
@@ -66,13 +80,59 @@ function isRelevantWorkspaceSession(sessionCwd: string): boolean {
   return !!getWorkspaceFolderForPath(sessionCwd);
 }
 
+function hydrateAgentFromSessionMeta(
+  agent: AgentState,
+  meta: CodexSessionMeta,
+  transcriptFile: string,
+): void {
+  agent.projectDir = meta.cwd;
+  agent.transcriptFile = transcriptFile;
+  agent.backendSessionId = meta.id;
+  agent.pendingSession = false;
+  agent.folderName = getFolderNameForPath(meta.cwd);
+}
+
+function startTranscriptWatching(
+  agentId: number,
+  runtime: BackendHostRuntime,
+  readFromStart = false,
+): void {
+  const agent = runtime.agents.get(agentId);
+  if (!agent || !agent.transcriptFile) {
+    return;
+  }
+
+  startFileWatching(
+    agentId,
+    agent.transcriptFile,
+    runtime.agents,
+    runtime.fileWatchers,
+    runtime.pollingTimers,
+    runtime.waitingTimers,
+    runtime.permissionTimers,
+    runtime.emitEvent,
+    processTranscriptLine,
+  );
+
+  if (readFromStart) {
+    readNewLines(
+      agentId,
+      runtime.agents,
+      runtime.waitingTimers,
+      runtime.permissionTimers,
+      runtime.emitEvent,
+      processTranscriptLine,
+    );
+  }
+}
+
 function watchTranscriptWhenReady(
   agentId: number,
   runtime: BackendHostRuntime,
   persistedAgent?: PersistedAgent,
 ): void {
   const agent = runtime.agents.get(agentId);
-  if (!agent) {
+  if (!agent || !agent.transcriptFile || agent.pendingSession) {
     return;
   }
 
@@ -83,29 +143,7 @@ function watchTranscriptWhenReady(
         agent.fileOffset = stat.size;
       }
 
-      startFileWatching(
-        agentId,
-        agent.transcriptFile,
-        runtime.agents,
-        runtime.fileWatchers,
-        runtime.pollingTimers,
-        runtime.waitingTimers,
-        runtime.permissionTimers,
-        runtime.emitEvent,
-        processTranscriptLine,
-      );
-
-      if (!persistedAgent) {
-        readNewLines(
-          agentId,
-          runtime.agents,
-          runtime.waitingTimers,
-          runtime.permissionTimers,
-          runtime.emitEvent,
-          processTranscriptLine,
-        );
-      }
-
+      startTranscriptWatching(agentId, runtime, !persistedAgent);
       return;
     }
   } catch {
@@ -117,6 +155,10 @@ function watchTranscriptWhenReady(
     if (!currentAgent) {
       clearInterval(pollTimer);
       runtime.transcriptPollTimers.delete(agentId);
+      return;
+    }
+
+    if (currentAgent.pendingSession || !currentAgent.transcriptFile) {
       return;
     }
 
@@ -133,28 +175,7 @@ function watchTranscriptWhenReady(
         currentAgent.fileOffset = stat.size;
       }
 
-      startFileWatching(
-        agentId,
-        currentAgent.transcriptFile,
-        runtime.agents,
-        runtime.fileWatchers,
-        runtime.pollingTimers,
-        runtime.waitingTimers,
-        runtime.permissionTimers,
-        runtime.emitEvent,
-        processTranscriptLine,
-      );
-
-      if (!persistedAgent) {
-        readNewLines(
-          agentId,
-          runtime.agents,
-          runtime.waitingTimers,
-          runtime.permissionTimers,
-          runtime.emitEvent,
-          processTranscriptLine,
-        );
-      }
+      startTranscriptWatching(agentId, runtime, !persistedAgent);
     } catch {
       /* file may not exist yet */
     }
@@ -165,13 +186,21 @@ function watchTranscriptWhenReady(
 
 function adoptTerminalForTranscript(
   terminal: vscode.Terminal,
+  meta: CodexSessionMeta,
   transcriptFile: string,
-  projectDir: string,
-  folderName: string | undefined,
   runtime: BackendHostRuntime,
 ): void {
   const agentId = runtime.nextAgentIdRef.current++;
-  const agent = createCodexAgentState(agentId, terminal, projectDir, transcriptFile, folderName);
+  const agent = createCodexAgentState(
+    agentId,
+    terminal,
+    meta.cwd,
+    transcriptFile,
+    getFolderNameForPath(meta.cwd),
+    meta.id,
+    false,
+  );
+
   runtime.agents.set(agentId, agent);
   runtime.activeAgentIdRef.current = agentId;
   runtime.persistAgents();
@@ -179,33 +208,40 @@ function adoptTerminalForTranscript(
   runtime.emitEvent({
     type: 'sessionCreated',
     agentId,
-    folderName,
+    folderName: agent.folderName,
   });
 
-  startFileWatching(
-    agentId,
-    transcriptFile,
-    runtime.agents,
-    runtime.fileWatchers,
-    runtime.pollingTimers,
-    runtime.waitingTimers,
-    runtime.permissionTimers,
-    runtime.emitEvent,
-    processTranscriptLine,
-  );
-  readNewLines(
-    agentId,
-    runtime.agents,
-    runtime.waitingTimers,
-    runtime.permissionTimers,
-    runtime.emitEvent,
-    processTranscriptLine,
+  startTranscriptWatching(agentId, runtime, true);
+}
+
+function findOwnedCodexAgentForTerminal(
+  runtime: BackendHostRuntime,
+  terminal: vscode.Terminal | undefined,
+): AgentState | undefined {
+  if (!terminal) {
+    return undefined;
+  }
+
+  return [...runtime.agents.values()].find(
+    (agent) => agent.backendId === 'codex' && agent.terminalRef === terminal,
   );
 }
 
+function attachTranscriptToAgent(
+  agent: AgentState,
+  meta: CodexSessionMeta,
+  transcriptFile: string,
+  runtime: BackendHostRuntime,
+  readFromStart = true,
+): void {
+  hydrateAgentFromSessionMeta(agent, meta, transcriptFile);
+  runtime.knownTranscriptFiles.add(transcriptFile);
+  runtime.persistAgents();
+  startTranscriptWatching(agent.id, runtime, readFromStart);
+}
+
 function scanForNewCodexSessions(runtime: BackendHostRuntime, sessionsRoot: string): void {
-  const files = listCodexSessionFiles(sessionsRoot);
-  for (const file of files) {
+  for (const file of listCodexSessionFiles(sessionsRoot)) {
     if (runtime.knownTranscriptFiles.has(file)) {
       continue;
     }
@@ -213,20 +249,45 @@ function scanForNewCodexSessions(runtime: BackendHostRuntime, sessionsRoot: stri
     runtime.knownTranscriptFiles.add(file);
 
     const meta = readCodexSessionMeta(file);
-    if (!meta || !isTopLevelCodexSession(meta) || !isRelevantWorkspaceSession(meta.cwd)) {
+    if (!meta) {
       continue;
     }
 
-    const folderName = getFolderNameForPath(meta.cwd);
-    const activeTerminal = vscode.window.activeTerminal;
-    const activeAgentId = runtime.activeAgentIdRef.current;
-    const activeAgent = activeAgentId !== null ? runtime.agents.get(activeAgentId) : undefined;
+    if (isCodexSubagentSession(meta)) {
+      attachDiscoveredCodexSubagent(meta, file, runtime.emitEvent);
+      continue;
+    }
 
-    if (activeAgent && activeAgent.backendId === 'codex') {
-      activeAgent.projectDir = meta.cwd;
-      activeAgent.folderName = folderName;
+    if (!isTopLevelCodexSession(meta) || !isRelevantWorkspaceSession(meta.cwd)) {
+      continue;
+    }
+
+    const existingBySessionId = findExistingCodexAgentBySessionId(runtime.agents.values(), meta.id);
+    if (existingBySessionId) {
+      if (shouldAttachCodexTranscript(existingBySessionId, file)) {
+        attachTranscriptToAgent(existingBySessionId, meta, file, runtime);
+      }
+      continue;
+    }
+
+    const activeTerminal = vscode.window.activeTerminal;
+    const pendingAgent = findPendingCodexAgentForSession(
+      runtime.agents.values(),
+      meta.cwd,
+      activeTerminal,
+    );
+    if (pendingAgent) {
+      attachTranscriptToAgent(pendingAgent, meta, file, runtime);
+      continue;
+    }
+
+    const ownedActiveAgent = findOwnedCodexAgentForTerminal(runtime, activeTerminal);
+    if (ownedActiveAgent && !ownedActiveAgent.pendingSession) {
+      ownedActiveAgent.projectDir = meta.cwd;
+      ownedActiveAgent.folderName = getFolderNameForPath(meta.cwd);
+      ownedActiveAgent.backendSessionId = meta.id;
       reassignAgentToFile(
-        activeAgent.id,
+        ownedActiveAgent.id,
         file,
         runtime.agents,
         runtime.fileWatchers,
@@ -241,18 +302,11 @@ function scanForNewCodexSessions(runtime: BackendHostRuntime, sessionsRoot: stri
       continue;
     }
 
-    if (!activeTerminal) {
+    if (!activeTerminal || !canAdoptActiveTerminal(activeTerminal, runtime.agents.values())) {
       continue;
     }
 
-    const terminalAlreadyOwned = [...runtime.agents.values()].some(
-      (agent) => agent.terminalRef === activeTerminal,
-    );
-    if (terminalAlreadyOwned) {
-      continue;
-    }
-
-    adoptTerminalForTranscript(activeTerminal, file, meta.cwd, folderName, runtime);
+    adoptTerminalForTranscript(activeTerminal, meta, file, runtime);
   }
 }
 
@@ -263,12 +317,22 @@ export const codexBackendProvider: AgentBackendProvider = {
   supportsBypassPermissions: true,
   async createSession(runtime: BackendHostRuntime, options: CreateSessionOptions) {
     const folders = vscode.workspace.workspaceFolders;
-    const cwd = options.folderPath || folders?.[0]?.uri.fsPath;
+    const cwd = options.folderPath || folders?.[0]?.uri.fsPath || '';
+    const isMultiRoot = !!(folders && folders.length > 1);
     const terminalIndex = runtime.nextTerminalIndexRef.current++;
     const terminal = vscode.window.createTerminal({
       name: `${TERMINAL_NAME_PREFIX} #${terminalIndex}`,
-      cwd,
+      cwd: cwd || undefined,
     });
+
+    const agentId = runtime.nextAgentIdRef.current++;
+    const folderName = isMultiRoot && cwd ? path.basename(cwd) : undefined;
+    const agent = createCodexAgentState(agentId, terminal, cwd, '', folderName, undefined, true);
+
+    runtime.agents.set(agentId, agent);
+    runtime.activeAgentIdRef.current = agentId;
+    runtime.persistAgents();
+    runtime.emitEvent({ type: 'sessionCreated', agentId, folderName });
 
     terminal.show();
     terminal.sendText(
@@ -292,16 +356,26 @@ export const codexBackendProvider: AgentBackendProvider = {
         continue;
       }
 
+      const sessionMeta =
+        persistedAgent.transcriptFile && fs.existsSync(persistedAgent.transcriptFile)
+          ? readCodexSessionMeta(persistedAgent.transcriptFile)
+          : null;
+      const backendSessionId = persistedAgent.backendSessionId ?? sessionMeta?.id;
       const agent = createCodexAgentState(
         persistedAgent.id,
         terminal,
-        persistedAgent.projectDir,
+        sessionMeta?.cwd ?? persistedAgent.projectDir,
         persistedAgent.transcriptFile,
-        persistedAgent.folderName,
+        persistedAgent.folderName ??
+          getFolderNameForPath(sessionMeta?.cwd ?? persistedAgent.projectDir),
+        backendSessionId,
+        persistedAgent.pendingSession === true,
       );
 
       runtime.agents.set(persistedAgent.id, agent);
-      runtime.knownTranscriptFiles.add(persistedAgent.transcriptFile);
+      if (persistedAgent.transcriptFile) {
+        runtime.knownTranscriptFiles.add(persistedAgent.transcriptFile);
+      }
 
       maxId = Math.max(maxId, persistedAgent.id);
       const terminalIndexMatch = persistedAgent.terminalName.match(/#(\d+)$/);
@@ -309,7 +383,9 @@ export const codexBackendProvider: AgentBackendProvider = {
         maxTerminalIndex = Math.max(maxTerminalIndex, parseInt(terminalIndexMatch[1], 10));
       }
 
-      watchTranscriptWhenReady(persistedAgent.id, runtime, persistedAgent);
+      if (!agent.pendingSession && agent.transcriptFile) {
+        watchTranscriptWhenReady(persistedAgent.id, runtime, persistedAgent);
+      }
     }
 
     if (maxId >= runtime.nextAgentIdRef.current) {
@@ -330,7 +406,41 @@ export const codexBackendProvider: AgentBackendProvider = {
       return;
     }
 
-    for (const file of listCodexSessionFiles(sessionsRoot)) {
+    for (const file of [...listCodexSessionFiles(sessionsRoot)].reverse()) {
+      const meta = readCodexSessionMeta(file);
+      if (!meta) {
+        runtime.knownTranscriptFiles.add(file);
+        continue;
+      }
+
+      if (isCodexSubagentSession(meta)) {
+        attachDiscoveredCodexSubagent(meta, file, runtime.emitEvent);
+        runtime.knownTranscriptFiles.add(file);
+        continue;
+      }
+
+      if (!isTopLevelCodexSession(meta) || !isRelevantWorkspaceSession(meta.cwd)) {
+        runtime.knownTranscriptFiles.add(file);
+        continue;
+      }
+
+      const existingBySessionId = findExistingCodexAgentBySessionId(
+        runtime.agents.values(),
+        meta.id,
+      );
+      if (existingBySessionId) {
+        if (shouldAttachCodexTranscript(existingBySessionId, file)) {
+          attachTranscriptToAgent(existingBySessionId, meta, file, runtime, false);
+        }
+        runtime.knownTranscriptFiles.add(file);
+        continue;
+      }
+
+      const pendingAgent = findPendingCodexAgentForSession(runtime.agents.values(), meta.cwd);
+      if (pendingAgent) {
+        attachTranscriptToAgent(pendingAgent, meta, file, runtime, false);
+      }
+
       runtime.knownTranscriptFiles.add(file);
     }
 

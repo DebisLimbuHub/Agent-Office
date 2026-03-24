@@ -20,7 +20,7 @@
 
 Agent Office turns multi-agent AI systems into something you can actually see and manage. Each agent becomes a character in a pixel art office. They walk around, sit at their desk, and visually reflect what they are doing - typing when writing code, reading when searching files, waiting when it needs your attention.
 
-Right now it works as a VS Code extension with built-in Claude Code and Codex CLI backends. The vision though, is a fully agent-agnostic, platform-agnostic interface for orchestrating any AI agents, deployable anywhere.
+Right now it works as a VS Code extension with built-in Codex CLI and Claude Code backends. Codex is the default built-in path, but the long-term vision is a fully agent-agnostic, platform-agnostic interface for orchestrating any AI agents, deployable anywhere.
 
 This is the source code for the Agent Office VS Code extension. During this first-pass rebrand, the published package identifiers still use the original `pixel-agents` name for compatibility: [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=pablodelucca.pixel-agents) and [Open VSX](https://open-vsx.org/extension/pablodelucca/pixel-agents).
 
@@ -47,7 +47,7 @@ This is the source code for the Agent Office VS Code extension. During this firs
 - VS Code 1.105.0 or later
 - A supported backend CLI installed and configured
 
-Today, the built-in providers are Claude Code and Codex CLI. The product direction and UI architecture remain intentionally backend-neutral, with the current work focused on improving backend parity and robustness rather than tying the office UI to any single CLI.
+Today, the built-in providers are Codex CLI and Claude Code. Codex is the default built-in backend path in the extension, while the product direction and UI architecture remain intentionally backend-neutral.
 
 ## Getting Started
 
@@ -68,7 +68,7 @@ Then press **F5** in VS Code to launch the Extension Development Host.
 ### Usage
 
 1. Open the **Agent Office** panel (it appears in the bottom panel area alongside your terminal)
-2. Click **+ Agent** to spawn a new agent terminal and its character. Right-click for the current built-in backend's bypass-permissions option when available
+2. Click **+ Agent** to spawn a new agent terminal and its character. Agent Office launches Codex by default; use the backend menu to switch providers. Right-click for the selected backend's bypass-permissions option when available
 3. Start working with the agent and watch the character react in real time
 4. Click a character to select it, then click a seat to reassign it
 5. Click **Layout** to open the office editor and customize your space

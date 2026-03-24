@@ -8,6 +8,8 @@ export const STATUS_TO_TOOL: Record<string, string> = {
   Writing: 'Write',
   Editing: 'Edit',
   Running: 'Bash',
+  Subtask: 'Task',
+  Delegating: 'Task',
   Task: 'Task',
 };
 

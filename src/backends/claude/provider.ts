@@ -36,6 +36,7 @@ function createClaudeAgentState(
     activeToolIds: new Set(),
     activeToolStatuses: new Map(),
     activeToolNames: new Map(),
+    activeToolInputs: new Map(),
     activeSubagentToolIds: new Map(),
     activeSubagentToolNames: new Map(),
     isWaiting: false,

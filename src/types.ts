@@ -11,11 +11,14 @@ export interface AgentState {
   terminalRef: vscode.Terminal;
   projectDir: string;
   transcriptFile: string;
+  backendSessionId?: string;
+  pendingSession?: boolean;
   fileOffset: number;
   lineBuffer: string;
   activeToolIds: Set<string>;
   activeToolStatuses: Map<string, string>;
   activeToolNames: Map<string, string>;
+  activeToolInputs: Map<string, Record<string, unknown>>;
   activeSubagentToolIds: Map<string, Set<string>>; // parentToolId → active sub-tool IDs
   activeSubagentToolNames: Map<string, Map<string, string>>; // parentToolId → (subToolId → toolName)
   isWaiting: boolean;
@@ -31,6 +34,8 @@ export interface PersistedAgent {
   terminalName: string;
   transcriptFile: string;
   projectDir: string;
+  backendSessionId?: string;
+  pendingSession?: boolean;
   /** Workspace folder name (only set for multi-root workspaces) */
   folderName?: string;
 }

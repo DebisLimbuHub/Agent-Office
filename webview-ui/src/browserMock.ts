@@ -25,6 +25,7 @@ import type {
   CatalogEntry,
   CharacterDirectionSprites,
 } from '../../shared/assets/types.ts';
+import { type BackendDescriptor, DEFAULT_BACKEND_ID } from '../../shared/protocol/backends.ts';
 
 interface MockPayload {
   characters: CharacterDirectionSprites[];
@@ -38,6 +39,21 @@ interface MockPayload {
 // ── Module-level state ─────────────────────────────────────────────────────────
 
 let mockPayload: MockPayload | null = null;
+
+const MOCK_BACKENDS: BackendDescriptor[] = [
+  {
+    id: 'codex',
+    displayName: 'Codex CLI',
+    isImplemented: true,
+    supportsBypassPermissions: true,
+  },
+  {
+    id: 'claude',
+    displayName: 'Claude Code',
+    isImplemented: true,
+    supportsBypassPermissions: true,
+  },
+];
 
 // ── PNG decode helpers (browser fallback) ───────────────────────────────────
 
@@ -265,21 +281,8 @@ export function dispatchMockMessages(): void {
   dispatch({ type: 'furnitureAssetsLoaded', catalog: furnitureCatalog, sprites: furnitureSprites });
   dispatch({
     type: 'backendProvidersLoaded',
-    backends: [
-      {
-        id: 'claude',
-        displayName: 'Claude Code',
-        isImplemented: true,
-        supportsBypassPermissions: true,
-      },
-      {
-        id: 'codex',
-        displayName: 'Codex CLI',
-        isImplemented: true,
-        supportsBypassPermissions: true,
-      },
-    ],
-    defaultBackendId: 'claude',
+    backends: MOCK_BACKENDS,
+    defaultBackendId: DEFAULT_BACKEND_ID,
   });
   dispatch({ type: 'layoutLoaded', layout });
   dispatch({ type: 'settingsLoaded', soundEnabled: false, externalAssetDirectories: [] });

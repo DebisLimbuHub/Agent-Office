@@ -65,6 +65,11 @@ export type BackendEvent =
       type: 'subagentPermissionRequired';
       agentId: number;
       parentToolId: string;
+    }
+  | {
+      type: 'subagentPermissionCleared';
+      agentId: number;
+      parentToolId: string;
     };
 
 export type BackendEventSink = (event: BackendEvent) => void;

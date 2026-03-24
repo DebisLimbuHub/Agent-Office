@@ -1,6 +1,6 @@
 import type { BackendDescriptor, BackendId } from '../../shared/protocol/backends.ts';
 
-export const DEFAULT_SELECTED_BACKEND_ID: BackendId = 'claude';
+export const DEFAULT_SELECTED_BACKEND_ID: BackendId = 'codex';
 
 export function normalizeBackendId(
   value: unknown,

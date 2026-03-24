@@ -2,46 +2,50 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import type { BackendDescriptor } from '../../shared/protocol/backends.ts';
-import { resolveSelectedBackendId } from '../src/backendOptions.ts';
+import { DEFAULT_SELECTED_BACKEND_ID, resolveSelectedBackendId } from '../src/backendOptions.ts';
 
 const backends: BackendDescriptor[] = [
   {
-    id: 'claude',
-    displayName: 'Claude Code',
+    id: 'codex',
+    displayName: 'Codex CLI',
     isImplemented: true,
     supportsBypassPermissions: true,
   },
   {
-    id: 'codex',
-    displayName: 'Codex CLI',
+    id: 'claude',
+    displayName: 'Claude Code',
     isImplemented: false,
     supportsBypassPermissions: false,
   },
 ];
 
-test('resolveSelectedBackendId keeps the preferred backend when it is implemented', () => {
-  assert.equal(resolveSelectedBackendId(backends, 'claude'), 'claude');
+test('DEFAULT_SELECTED_BACKEND_ID defaults to Codex', () => {
+  assert.equal(DEFAULT_SELECTED_BACKEND_ID, 'codex');
 });
 
-test('resolveSelectedBackendId falls back to an implemented default backend', () => {
-  assert.equal(resolveSelectedBackendId(backends, 'codex', 'claude'), 'claude');
+test('resolveSelectedBackendId keeps the preferred backend when it is implemented', () => {
+  assert.equal(resolveSelectedBackendId(backends, 'codex'), 'codex');
+});
+
+test('resolveSelectedBackendId falls back to the implemented default backend', () => {
+  assert.equal(resolveSelectedBackendId(backends, 'claude', 'codex'), 'codex');
 });
 
 test('resolveSelectedBackendId falls back to the first implemented backend when needed', () => {
-  const codexFirst: BackendDescriptor[] = [
+  const claudeFirst: BackendDescriptor[] = [
     {
-      id: 'codex',
-      displayName: 'Codex CLI',
+      id: 'claude',
+      displayName: 'Claude Code',
       isImplemented: false,
       supportsBypassPermissions: false,
     },
     {
-      id: 'claude',
-      displayName: 'Claude Code',
+      id: 'codex',
+      displayName: 'Codex CLI',
       isImplemented: true,
       supportsBypassPermissions: true,
     },
   ];
 
-  assert.equal(resolveSelectedBackendId(codexFirst, 'codex', 'codex'), 'claude');
+  assert.equal(resolveSelectedBackendId(claudeFirst, 'claude', 'claude'), 'codex');
 });

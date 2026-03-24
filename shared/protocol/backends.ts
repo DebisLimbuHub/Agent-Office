@@ -1,6 +1,6 @@
 export type BackendId = 'claude' | 'codex';
 
-export const DEFAULT_BACKEND_ID: BackendId = 'claude';
+export const DEFAULT_BACKEND_ID: BackendId = 'codex';
 
 export interface BackendDescriptor {
   id: BackendId;

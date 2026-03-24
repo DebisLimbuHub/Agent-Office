@@ -60,6 +60,8 @@ export function persistAgents(
       terminalName: agent.terminalRef.name,
       transcriptFile: agent.transcriptFile,
       projectDir: agent.projectDir,
+      backendSessionId: agent.backendSessionId,
+      pendingSession: agent.pendingSession,
       folderName: agent.folderName,
     });
   }
@@ -89,6 +91,9 @@ export function loadPersistedAgents(context: vscode.ExtensionContext): Persisted
         transcriptFile: (entry.transcriptFile ??
           (entry as Record<string, unknown>).jsonlFile) as string,
         projectDir: entry.projectDir,
+        backendSessionId:
+          typeof entry.backendSessionId === 'string' ? entry.backendSessionId : undefined,
+        pendingSession: entry.pendingSession === true,
         folderName: typeof entry.folderName === 'string' ? entry.folderName : undefined,
       },
     ];

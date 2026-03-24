@@ -86,9 +86,13 @@ jobs:
       - name: Build
         id: build
         if: always() && steps.install_root.outcome == 'success' && steps.install_webview.outcome == 'success'
-        run: |
-          node esbuild.js
-          cd webview-ui && npm run build
+        run: npm run build
+        continue-on-error: true
+
+      - name: Tests
+        id: tests
+        if: always() && steps.install_root.outcome == 'success' && steps.install_webview.outcome == 'success'
+        run: npm test
         continue-on-error: true
 
       # --- Advisory Checks (non-blocking) ---
@@ -120,6 +124,7 @@ jobs:
           WEBVIEW_LINT: ${{ steps.webview_lint.outcome }}
           FORMAT_CHECK: ${{ steps.format_check.outcome }}
           BUILD: ${{ steps.build.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
           AUDIT_ROOT: ${{ steps.audit_root.outcome }}
           AUDIT_WEBVIEW: ${{ steps.audit_webview.outcome }}
         run: |
@@ -140,6 +145,7 @@ jobs:
             echo "| **Webview lint** | $(status "$WEBVIEW_LINT") |"
             echo "| **Format check** | $(status "$FORMAT_CHECK") |"
             echo "| **Build** | $(status "$BUILD") |"
+            echo "| **Tests** | $(status "$TESTS") |"
             echo "| Audit root _(advisory)_ | $(status "$AUDIT_ROOT") |"
             echo "| Audit webview _(advisory)_ | $(status "$AUDIT_WEBVIEW") |"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -158,11 +164,12 @@ jobs:
           WEBVIEW_LINT: ${{ steps.webview_lint.outcome }}
           FORMAT_CHECK: ${{ steps.format_check.outcome }}
           BUILD: ${{ steps.build.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
         run: |
           failed=0
           for step in CHECKOUT SETUP_NODE INSTALL_ROOT INSTALL_WEBVIEW \
                       TYPE_CHECK ROOT_LINT WEBVIEW_LINT FORMAT_CHECK \
-                      BUILD; do
+                      BUILD TESTS; do
             eval "val=\$$step"
             if [ "$val" != "success" ]; then
               echo "::error::$step failed"

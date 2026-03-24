@@ -6,6 +6,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 import {
+  isCodexSubagentSession,
   isTopLevelCodexSession,
   listCodexSessionFiles,
   readCodexSessionMeta,
@@ -57,6 +58,7 @@ test('readCodexSessionMeta returns the top-level session metadata shape', () => 
       source: 'cli',
       agentNickname: undefined,
       agentRole: undefined,
+      parentSessionId: undefined,
     });
     assert.equal(meta ? isTopLevelCodexSession(meta) : false, true);
   } finally {
@@ -91,6 +93,7 @@ test('readCodexSessionMeta handles very large session_meta lines', () => {
       source: 'cli',
       agentNickname: undefined,
       agentRole: undefined,
+      parentSessionId: undefined,
     });
   } finally {
     fs.rmSync(rootDir, { recursive: true, force: true });
@@ -98,18 +101,62 @@ test('readCodexSessionMeta handles very large session_meta lines', () => {
 });
 
 test('isTopLevelCodexSession rejects nested subagent sessions', () => {
-  assert.equal(
-    isTopLevelCodexSession({
-      id: 'session-456',
+  const meta = {
+    id: 'session-456',
+    cwd: '/workspace/project',
+    source: {
+      subagent: {
+        thread_spawn: {
+          parent_thread_id: 'parent',
+        },
+      },
+    },
+    parentSessionId: 'parent',
+  };
+
+  assert.equal(isTopLevelCodexSession(meta), false);
+  assert.equal(isCodexSubagentSession(meta), true);
+});
+
+test('readCodexSessionMeta extracts parent session ids for child sessions', () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-codex-child-meta-'));
+  const filePath = path.join(rootDir, 'child.jsonl');
+
+  try {
+    fs.writeFileSync(
+      filePath,
+      `${JSON.stringify({
+        type: 'session_meta',
+        payload: {
+          id: 'child-session',
+          cwd: '/workspace/project',
+          source: {
+            subagent: {
+              thread_spawn: {
+                parent_thread_id: 'parent-session',
+              },
+            },
+          },
+        },
+      })}\n`,
+      'utf-8',
+    );
+
+    assert.deepEqual(readCodexSessionMeta(filePath), {
+      id: 'child-session',
       cwd: '/workspace/project',
       source: {
         subagent: {
           thread_spawn: {
-            parent_thread_id: 'parent',
+            parent_thread_id: 'parent-session',
           },
         },
       },
-    }),
-    false,
-  );
+      agentNickname: undefined,
+      agentRole: undefined,
+      parentSessionId: 'parent-session',
+    });
+  } finally {
+    fs.rmSync(rootDir, { recursive: true, force: true });
+  }
 });

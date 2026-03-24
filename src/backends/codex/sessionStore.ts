@@ -8,6 +8,7 @@ export interface CodexSessionMeta {
   source: unknown;
   agentNickname?: string | null;
   agentRole?: string | null;
+  parentSessionId?: string;
 }
 
 export function getCodexSessionsDirectory(): string {
@@ -99,6 +100,18 @@ export function readCodexSessionMeta(filePath: string): CodexSessionMeta | null 
       return null;
     }
 
+    const threadSpawn =
+      typeof payload.source === 'object' &&
+      payload.source !== null &&
+      typeof (payload.source as { subagent?: unknown }).subagent === 'object' &&
+      (payload.source as { subagent?: unknown }).subagent !== null &&
+      typeof (payload.source as { subagent: { thread_spawn?: unknown } }).subagent.thread_spawn ===
+        'object' &&
+      (payload.source as { subagent: { thread_spawn?: unknown } }).subagent.thread_spawn !== null
+        ? (payload.source as { subagent: { thread_spawn: { parent_thread_id?: unknown } } })
+            .subagent.thread_spawn
+        : null;
+
     return {
       id: payload.id,
       cwd: payload.cwd,
@@ -106,6 +119,10 @@ export function readCodexSessionMeta(filePath: string): CodexSessionMeta | null 
       agentNickname:
         typeof payload.agent_nickname === 'string' ? payload.agent_nickname : undefined,
       agentRole: typeof payload.agent_role === 'string' ? payload.agent_role : undefined,
+      parentSessionId:
+        threadSpawn && typeof threadSpawn.parent_thread_id === 'string'
+          ? threadSpawn.parent_thread_id
+          : undefined,
     };
   } catch {
     return null;
@@ -114,4 +131,8 @@ export function readCodexSessionMeta(filePath: string): CodexSessionMeta | null 
 
 export function isTopLevelCodexSession(meta: CodexSessionMeta): boolean {
   return meta.source === 'cli';
+}
+
+export function isCodexSubagentSession(meta: CodexSessionMeta): boolean {
+  return typeof meta.parentSessionId === 'string';
 }

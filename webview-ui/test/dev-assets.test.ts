@@ -24,7 +24,7 @@ async function startDevServer(base: string, port: number): Promise<ViteDevServer
   const server = await createServer({
     configFile: path.resolve(root, 'vite.config.ts'),
     base,
-    server: { port, strictPort: false },
+    server: { host: '127.0.0.1', port, strictPort: true },
     logLevel: 'silent',
   });
   await server.listen();
@@ -34,7 +34,7 @@ async function startDevServer(base: string, port: number): Promise<ViteDevServer
 function serverUrl(server: ViteDevServer): string {
   const addr = server.httpServer?.address();
   const port = typeof addr === 'object' && addr !== null ? addr.port : 5173;
-  return `http://localhost:${port}`;
+  return `http://127.0.0.1:${port}`;
 }
 
 function assetUrl(baseUrl: string, basePath: string, relPath: string): string {

@@ -1,126 +1,17 @@
-import * as path from 'path';
-
-import {
-  BASH_COMMAND_DISPLAY_MAX_LENGTH,
-  TASK_DESCRIPTION_DISPLAY_MAX_LENGTH,
-  TOOL_DONE_DELAY_MS,
-} from '../../constants.js';
-import {
-  cancelPermissionTimer,
-  cancelWaitingTimer,
-  startPermissionTimer,
-} from '../../timerManager.js';
+import { TOOL_DONE_DELAY_MS } from '../../constants.js';
 import type { AgentState } from '../../types.js';
 import type { BackendEventSink } from '../types.js';
-
-const TOOL_STATUS_OVERRIDES: Record<string, string> = {
-  apply_patch: 'Applying patch',
-  close_agent: 'Closing agent',
-  parallel: 'Running multiple commands',
-  request_user_input: 'Waiting for your answer',
-  resume_agent: 'Resuming agent',
-  send_input: 'Messaging agent',
-  spawn_agent: 'Delegating task',
-  update_plan: 'Planning',
-  view_image: 'Viewing image',
-  wait_agent: 'Waiting for agent',
-};
-
-export const PERMISSION_EXEMPT_TOOLS = new Set([
-  'apply_patch',
-  'close_agent',
-  'parallel',
-  'request_user_input',
-  'resume_agent',
-  'send_input',
-  'spawn_agent',
-  'update_plan',
-  'view_image',
-  'wait_agent',
-  'web_search',
-]);
+import {
+  extractToolTargetSessionId,
+  formatToolStatus,
+  parseToolInput,
+  PERMISSION_EXEMPT_TOOLS,
+} from './activity.js';
+import { getCodexSessionsDirectory } from './sessionStore.js';
+import { cleanupCodexSubagentBySessionId, registerCodexSubagent } from './subagentTracker.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-function truncate(value: string, maxLength: number): string {
-  return value.length > maxLength ? `${value.slice(0, maxLength)}…` : value;
-}
-
-function parseToolInput(value: unknown): Record<string, unknown> {
-  if (isRecord(value)) {
-    return value;
-  }
-
-  if (typeof value !== 'string' || !value.trim()) {
-    return {};
-  }
-
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return isRecord(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function formatToolStatus(toolName: string, rawInput: unknown): string {
-  const input = parseToolInput(rawInput);
-  const baseName = (value: unknown) => (typeof value === 'string' ? path.basename(value) : '');
-
-  if (toolName in TOOL_STATUS_OVERRIDES) {
-    if (toolName === 'spawn_agent') {
-      const message =
-        typeof input.message === 'string'
-          ? input.message
-          : Array.isArray(input.items)
-            ? input.items
-                .map((item) =>
-                  isRecord(item) && typeof item.text === 'string' ? item.text.trim() : '',
-                )
-                .find(Boolean)
-            : '';
-      return message
-        ? `Delegating: ${truncate(message, TASK_DESCRIPTION_DISPLAY_MAX_LENGTH)}`
-        : 'Delegating task';
-    }
-
-    if (toolName === 'parallel') {
-      const toolUses = Array.isArray(input.tool_uses) ? input.tool_uses.length : 0;
-      return toolUses > 0
-        ? `Running ${toolUses} parallel task${toolUses === 1 ? '' : 's'}`
-        : 'Running multiple commands';
-    }
-
-    return TOOL_STATUS_OVERRIDES[toolName];
-  }
-
-  switch (toolName) {
-    case 'exec_command': {
-      const cmd = typeof input.cmd === 'string' ? input.cmd : '';
-      return `Running: ${truncate(cmd, BASH_COMMAND_DISPLAY_MAX_LENGTH)}`;
-    }
-    case 'open':
-      return `Opening ${baseName(input.ref_id) || 'resource'}`;
-    case 'click':
-      return 'Following link';
-    case 'find':
-      return 'Searching page';
-    case 'search_query':
-    case 'image_query':
-      return 'Searching the web';
-    case 'finance':
-      return 'Checking markets';
-    case 'weather':
-      return 'Checking weather';
-    case 'sports':
-      return 'Checking sports';
-    case 'time':
-      return 'Checking time';
-    default:
-      return `Using ${toolName}`;
-  }
 }
 
 function hasTrackedActivity(agent: AgentState): boolean {
@@ -136,16 +27,15 @@ function hasTrackedActivity(agent: AgentState): boolean {
 function clearTrackedActivity(
   agentId: number,
   agent: AgentState,
-  permissionTimers: Map<number, ReturnType<typeof setTimeout>>,
   emitEvent: BackendEventSink,
 ): void {
   agent.activeToolIds.clear();
   agent.activeToolStatuses.clear();
   agent.activeToolNames.clear();
+  agent.activeToolInputs.clear();
   agent.activeSubagentToolIds.clear();
   agent.activeSubagentToolNames.clear();
   agent.permissionSent = false;
-  cancelPermissionTimer(agentId, permissionTimers);
   emitEvent({ type: 'toolsCleared', agentId });
 }
 
@@ -156,11 +46,20 @@ function beginTurn(
   permissionTimers: Map<number, ReturnType<typeof setTimeout>>,
   emitEvent: BackendEventSink,
 ): void {
-  cancelWaitingTimer(agentId, waitingTimers);
-  cancelPermissionTimer(agentId, permissionTimers);
+  const waitingTimer = waitingTimers.get(agentId);
+  if (waitingTimer) {
+    clearTimeout(waitingTimer);
+    waitingTimers.delete(agentId);
+  }
+
+  const permissionTimer = permissionTimers.get(agentId);
+  if (permissionTimer) {
+    clearTimeout(permissionTimer);
+    permissionTimers.delete(agentId);
+  }
 
   if (hasTrackedActivity(agent)) {
-    clearTrackedActivity(agentId, agent, permissionTimers, emitEvent);
+    clearTrackedActivity(agentId, agent, emitEvent);
   }
 
   agent.isWaiting = false;
@@ -175,34 +74,52 @@ function markAgentWorking(
   waitingTimers: Map<number, ReturnType<typeof setTimeout>>,
   emitEvent: BackendEventSink,
 ): void {
-  cancelWaitingTimer(agentId, waitingTimers);
+  const waitingTimer = waitingTimers.get(agentId);
+  if (waitingTimer) {
+    clearTimeout(waitingTimer);
+    waitingTimers.delete(agentId);
+  }
+
   agent.isWaiting = false;
   agent.hadToolsInTurn = true;
   emitEvent({ type: 'statusChanged', agentId, status: 'active' });
 }
 
-function restartPermissionTimerIfNeeded(
+function schedulePermissionCheck(
   agentId: number,
   agents: Map<number, AgentState>,
   permissionTimers: Map<number, ReturnType<typeof setTimeout>>,
   emitEvent: BackendEventSink,
 ): void {
-  const agent = agents.get(agentId);
-  if (!agent) {
-    return;
+  const current = permissionTimers.get(agentId);
+  if (current) {
+    clearTimeout(current);
   }
 
-  const hasNonExemptTool = [...agent.activeToolIds].some((toolId) => {
-    const toolName = agent.activeToolNames.get(toolId);
-    return !!toolName && !PERMISSION_EXEMPT_TOOLS.has(toolName);
-  });
+  const timer = setTimeout(() => {
+    permissionTimers.delete(agentId);
+    const agent = agents.get(agentId);
+    if (!agent) {
+      return;
+    }
 
-  if (hasNonExemptTool) {
-    startPermissionTimer(agentId, agents, permissionTimers, PERMISSION_EXEMPT_TOOLS, emitEvent);
-  }
+    const hasNonExemptTool = [...agent.activeToolIds].some((toolId) => {
+      const toolName = agent.activeToolNames.get(toolId);
+      return !!toolName && !PERMISSION_EXEMPT_TOOLS.has(toolName);
+    });
+
+    if (!hasNonExemptTool || agent.permissionSent) {
+      return;
+    }
+
+    agent.permissionSent = true;
+    emitEvent({ type: 'permissionRequired', agentId });
+  }, 7000);
+
+  permissionTimers.set(agentId, timer);
 }
 
-function completeTrackedTool(
+function finishTrackedTool(
   agentId: number,
   toolId: string,
   agents: Map<number, AgentState>,
@@ -217,24 +134,13 @@ function completeTrackedTool(
   agent.activeToolIds.delete(toolId);
   agent.activeToolStatuses.delete(toolId);
   agent.activeToolNames.delete(toolId);
+  agent.activeToolInputs.delete(toolId);
 
   setTimeout(() => {
     emitEvent({ type: 'toolFinished', agentId, toolId });
   }, TOOL_DONE_DELAY_MS);
 
-  restartPermissionTimerIfNeeded(agentId, agents, permissionTimers, emitEvent);
-}
-
-function emitTransientTool(
-  agentId: number,
-  status: string,
-  toolId: string,
-  emitEvent: BackendEventSink,
-): void {
-  emitEvent({ type: 'toolStarted', agentId, toolId, status });
-  setTimeout(() => {
-    emitEvent({ type: 'toolFinished', agentId, toolId });
-  }, TOOL_DONE_DELAY_MS);
+  schedulePermissionCheck(agentId, agents, permissionTimers, emitEvent);
 }
 
 function processEventMessage(
@@ -254,12 +160,20 @@ function processEventMessage(
     case 'user_message':
       beginTurn(agentId, agent, waitingTimers, permissionTimers, emitEvent);
       break;
-    case 'task_complete':
-      cancelWaitingTimer(agentId, waitingTimers);
-      cancelPermissionTimer(agentId, permissionTimers);
+    case 'task_complete': {
+      const waitingTimer = waitingTimers.get(agentId);
+      if (waitingTimer) {
+        clearTimeout(waitingTimer);
+        waitingTimers.delete(agentId);
+      }
+      const permissionTimer = permissionTimers.get(agentId);
+      if (permissionTimer) {
+        clearTimeout(permissionTimer);
+        permissionTimers.delete(agentId);
+      }
 
       if (hasTrackedActivity(agent)) {
-        clearTrackedActivity(agentId, agent, permissionTimers, emitEvent);
+        clearTrackedActivity(agentId, agent, emitEvent);
       }
 
       agent.isWaiting = true;
@@ -267,6 +181,7 @@ function processEventMessage(
       agent.hadToolsInTurn = false;
       emitEvent({ type: 'statusChanged', agentId, status: 'waiting' });
       break;
+    }
     default:
       break;
   }
@@ -297,12 +212,54 @@ function processFunctionCall(
   agent.activeToolIds.add(toolId);
   agent.activeToolStatuses.set(toolId, status);
   agent.activeToolNames.set(toolId, toolName);
+  agent.activeToolInputs.set(toolId, parseToolInput(payload.arguments));
 
   emitEvent({ type: 'toolStarted', agentId, toolId, status });
 
   if (!PERMISSION_EXEMPT_TOOLS.has(toolName)) {
-    startPermissionTimer(agentId, agents, permissionTimers, PERMISSION_EXEMPT_TOOLS, emitEvent);
+    schedulePermissionCheck(agentId, agents, permissionTimers, emitEvent);
   }
+}
+
+function processFunctionCallOutput(
+  agentId: number,
+  payload: Record<string, unknown>,
+  agents: Map<number, AgentState>,
+  permissionTimers: Map<number, ReturnType<typeof setTimeout>>,
+  emitEvent: BackendEventSink,
+): void {
+  const agent = agents.get(agentId);
+  const toolId = typeof payload.call_id === 'string' ? payload.call_id : null;
+  if (!agent || !toolId) {
+    return;
+  }
+
+  const toolName = agent.activeToolNames.get(toolId);
+  if (toolName === 'spawn_agent' && agent.backendSessionId) {
+    const output = parseToolInput(payload.output);
+    if (typeof output.agent_id === 'string') {
+      registerCodexSubagent(
+        agentId,
+        agent.backendSessionId,
+        toolId,
+        output.agent_id,
+        payload.output,
+        getCodexSessionsDirectory(),
+        emitEvent,
+      );
+    }
+  }
+
+  if (toolName === 'close_agent') {
+    const targetSessionId =
+      extractToolTargetSessionId(payload.output) ??
+      extractToolTargetSessionId(agent.activeToolInputs.get(toolId));
+    if (targetSessionId) {
+      cleanupCodexSubagentBySessionId(targetSessionId, emitEvent);
+    }
+  }
+
+  finishTrackedTool(agentId, toolId, agents, permissionTimers, emitEvent);
 }
 
 function processCustomToolCall(
@@ -311,7 +268,6 @@ function processCustomToolCall(
   record: Record<string, unknown>,
   agents: Map<number, AgentState>,
   waitingTimers: Map<number, ReturnType<typeof setTimeout>>,
-  permissionTimers: Map<number, ReturnType<typeof setTimeout>>,
   emitEvent: BackendEventSink,
 ): void {
   const agent = agents.get(agentId);
@@ -327,20 +283,12 @@ function processCustomToolCall(
   const status = formatToolStatus(toolName, payload.input);
 
   markAgentWorking(agentId, agent, waitingTimers, emitEvent);
-
-  if (!agent.activeToolIds.has(toolId) && payload.status !== 'completed') {
-    agent.activeToolIds.add(toolId);
-    agent.activeToolStatuses.set(toolId, status);
-    agent.activeToolNames.set(toolId, toolName);
-    emitEvent({ type: 'toolStarted', agentId, toolId, status });
-  } else if (payload.status === 'completed' && !agent.activeToolIds.has(toolId)) {
-    emitTransientTool(agentId, status, toolId, emitEvent);
-  }
+  emitEvent({ type: 'toolStarted', agentId, toolId, status });
 
   if (payload.status === 'completed') {
-    completeTrackedTool(agentId, toolId, agents, permissionTimers, emitEvent);
-  } else if (!PERMISSION_EXEMPT_TOOLS.has(toolName)) {
-    startPermissionTimer(agentId, agents, permissionTimers, PERMISSION_EXEMPT_TOOLS, emitEvent);
+    setTimeout(() => {
+      emitEvent({ type: 'toolFinished', agentId, toolId });
+    }, TOOL_DONE_DELAY_MS);
   }
 }
 
@@ -358,12 +306,11 @@ function processWebSearchCall(
   }
 
   markAgentWorking(agentId, agent, waitingTimers, emitEvent);
-  emitTransientTool(
-    agentId,
-    'Searching the web',
-    `web-search:${String(record.timestamp)}`,
-    emitEvent,
-  );
+  const toolId = `web-search:${String(record.timestamp ?? agentId)}`;
+  emitEvent({ type: 'toolStarted', agentId, toolId, status: 'Searching the web' });
+  setTimeout(() => {
+    emitEvent({ type: 'toolFinished', agentId, toolId });
+  }, TOOL_DONE_DELAY_MS);
 }
 
 function processResponseItem(
@@ -380,20 +327,10 @@ function processResponseItem(
       processFunctionCall(agentId, payload, agents, waitingTimers, permissionTimers, emitEvent);
       break;
     case 'function_call_output':
-      if (typeof payload.call_id === 'string') {
-        completeTrackedTool(agentId, payload.call_id, agents, permissionTimers, emitEvent);
-      }
+      processFunctionCallOutput(agentId, payload, agents, permissionTimers, emitEvent);
       break;
     case 'custom_tool_call':
-      processCustomToolCall(
-        agentId,
-        payload,
-        record,
-        agents,
-        waitingTimers,
-        permissionTimers,
-        emitEvent,
-      );
+      processCustomToolCall(agentId, payload, record, agents, waitingTimers, emitEvent);
       break;
     case 'web_search_call':
       processWebSearchCall(agentId, payload, record, agents, waitingTimers, emitEvent);
@@ -437,6 +374,6 @@ export function processTranscriptLine(
         break;
     }
   } catch {
-    // Ignore malformed lines
+    // Ignore malformed lines.
   }
 }

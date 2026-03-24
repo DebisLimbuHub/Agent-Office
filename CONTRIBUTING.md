@@ -101,6 +101,7 @@ These rules are set to `warn` — they won't block your PR but will flag violati
 2. Make your changes
 3. Verify everything passes locally:
    ```bash
+   npm test                              # Host + webview tests
    npm run lint                         # Extension lint
    cd webview-ui && npm run lint && cd ..  # Webview lint
    npm run build                        # Type check + esbuild + Vite

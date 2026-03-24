@@ -234,6 +234,8 @@ export function useExtensionMessages(
         if (status.startsWith('Subtask:')) {
           const label = status.slice('Subtask:'.length).trim();
           const subId = os.addSubagent(id, toolId);
+          os.setAgentTool(subId, 'Task');
+          os.setAgentActive(subId, true);
           setSubagentCharacters((prev) => {
             if (prev.some((s) => s.id === subId)) return prev;
             return [...prev, { id: subId, parentAgentId: id, parentToolId: toolId, label }];
@@ -308,6 +310,30 @@ export function useExtensionMessages(
         if (subId !== null) {
           os.showPermissionBubble(subId);
         }
+      } else if (msg.type === 'subagentToolPermissionClear') {
+        const id = msg.id as number;
+        const parentToolId = msg.parentToolId as string;
+        setSubagentTools((prev) => {
+          const agentSubs = prev[id];
+          const list = agentSubs?.[parentToolId];
+          if (!agentSubs || !list || !list.some((tool) => tool.permissionWait)) {
+            return prev;
+          }
+
+          return {
+            ...prev,
+            [id]: {
+              ...agentSubs,
+              [parentToolId]: list.map((tool) =>
+                tool.permissionWait ? { ...tool, permissionWait: false } : tool,
+              ),
+            },
+          };
+        });
+        const subId = os.getSubagentId(id, parentToolId);
+        if (subId !== null) {
+          os.clearPermissionBubble(subId);
+        }
       } else if (msg.type === 'agentToolPermissionClear') {
         const id = msg.id as number;
         setAgentTools((prev) => {
@@ -332,6 +358,18 @@ export function useExtensionMessages(
         const parentToolId = msg.parentToolId as string;
         const toolId = msg.toolId as string;
         const status = msg.status as string;
+        let subId = os.getSubagentId(id, parentToolId);
+        if (subId === null) {
+          const createdSubId = os.addSubagent(id, parentToolId);
+          subId = createdSubId;
+          const label = status.startsWith('Subtask:')
+            ? status.slice('Subtask:'.length).trim()
+            : status;
+          setSubagentCharacters((prev) => {
+            if (prev.some((sub) => sub.id === createdSubId)) return prev;
+            return [...prev, { id: createdSubId, parentAgentId: id, parentToolId, label }];
+          });
+        }
         setSubagentTools((prev) => {
           const agentSubs = prev[id] || {};
           const list = agentSubs[parentToolId] || [];
@@ -342,7 +380,6 @@ export function useExtensionMessages(
           };
         });
         // Update sub-agent character's tool and active state
-        const subId = os.getSubagentId(id, parentToolId);
         if (subId !== null) {
           const subToolName = extractToolName(status);
           os.setAgentTool(subId, subToolName);

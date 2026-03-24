@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
 import { TOOL_DONE_DELAY_MS } from '../../constants.js';
 import type { BackendEvent } from '../types.js';
+import { disposeCodexSubagentState, registerCodexSubagent } from './subagentTracker.js';
 import { processTranscriptLine } from './transcriptParser.js';
 
 function createAgentState() {
@@ -17,6 +22,7 @@ function createAgentState() {
     activeToolIds: new Set<string>(),
     activeToolStatuses: new Map<string, string>(),
     activeToolNames: new Map<string, string>(),
+    activeToolInputs: new Map<string, Record<string, unknown>>(),
     activeSubagentToolIds: new Map<string, Set<string>>(),
     activeSubagentToolNames: new Map<string, Map<string, string>>(),
     isWaiting: false,
@@ -110,6 +116,7 @@ test('Codex parser maps exec_command lifecycle to tool and waiting events', asyn
     assert.equal(events.at(-1)?.type, 'statusChanged');
     assert.deepEqual(events.at(-1), { type: 'statusChanged', agentId: 1, status: 'waiting' });
   } finally {
+    disposeCodexSubagentState();
     for (const timer of waitingTimers.values()) {
       clearTimeout(timer);
     }
@@ -152,9 +159,10 @@ test('Codex parser formats spawn_agent as a delegation tool', () => {
     assert.equal(toolStart?.type, 'toolStarted');
     assert.equal(toolStart?.agentId, 1);
     assert.equal(toolStart?.toolId, 'call-spawn');
-    assert.equal(toolStart?.status, 'Delegating: Implement the Codex backend provider and…');
+    assert.equal(toolStart?.status, 'Subtask: Implement the Codex backend provider and…');
     assert.equal(permissionTimers.has(1), false);
   } finally {
+    disposeCodexSubagentState();
     for (const timer of waitingTimers.values()) {
       clearTimeout(timer);
     }
@@ -193,4 +201,86 @@ test('Codex parser surfaces completed apply_patch calls as transient tools', asy
 
   assert(events.some((event) => event.type === 'toolStarted' && event.toolId === 'call-patch'));
   assert(events.some((event) => event.type === 'toolFinished' && event.toolId === 'call-patch'));
+  disposeCodexSubagentState();
+});
+
+test('Codex parser clears subagents when close_agent only includes the child id in the input', async () => {
+  const agents = new Map([
+    [
+      1,
+      {
+        ...createAgentState(),
+        backendSessionId: 'parent-session',
+      },
+    ],
+  ]);
+  const waitingTimers = new Map<number, ReturnType<typeof setTimeout>>();
+  const permissionTimers = new Map<number, ReturnType<typeof setTimeout>>();
+  const events: BackendEvent[] = [];
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-codex-close-agent-'));
+
+  try {
+    registerCodexSubagent(
+      1,
+      'parent-session',
+      'parent-tool',
+      'child-session',
+      JSON.stringify({ agent_id: 'child-session' }),
+      rootDir,
+      (event) => events.push(event),
+    );
+
+    processTranscriptLine(
+      1,
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'function_call',
+          call_id: 'call-close',
+          name: 'close_agent',
+          arguments: JSON.stringify({ agent_id: 'child-session' }),
+        },
+      }),
+      agents,
+      waitingTimers,
+      permissionTimers,
+      (event) => events.push(event),
+    );
+
+    processTranscriptLine(
+      1,
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'function_call_output',
+          call_id: 'call-close',
+          output: JSON.stringify({ previous_status: 'active' }),
+        },
+      }),
+      agents,
+      waitingTimers,
+      permissionTimers,
+      (event) => events.push(event),
+    );
+
+    await waitForToolDone();
+
+    assert(
+      events.some(
+        (event) =>
+          event.type === 'subagentCleared' &&
+          event.agentId === 1 &&
+          event.parentToolId === 'parent-tool',
+      ),
+    );
+  } finally {
+    disposeCodexSubagentState();
+    fs.rmSync(rootDir, { recursive: true, force: true });
+    for (const timer of waitingTimers.values()) {
+      clearTimeout(timer);
+    }
+    for (const timer of permissionTimers.values()) {
+      clearTimeout(timer);
+    }
+  }
 });

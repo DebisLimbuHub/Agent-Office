@@ -4,8 +4,8 @@ import { codexBackendProvider } from './codex/provider.js';
 import type { AgentBackendProvider, BackendDescriptor } from './types.js';
 
 const providers = new Map<AgentBackendProvider['id'], AgentBackendProvider>([
-  [claudeBackendProvider.id, claudeBackendProvider],
   [codexBackendProvider.id, codexBackendProvider],
+  [claudeBackendProvider.id, claudeBackendProvider],
 ]);
 
 export function getBackendProvider(backendId: AgentBackendProvider['id']): AgentBackendProvider {

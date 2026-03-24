@@ -26,6 +26,10 @@ import {
   sendWallTilesToWebview,
 } from './assetLoader.js';
 import {
+  cleanupCodexSubagentsForAgent,
+  disposeCodexSubagentState,
+} from './backends/codex/subagentTracker.js';
+import {
   getBackendProvider,
   listBackendDescriptors,
   listBackendProviders,
@@ -168,6 +172,13 @@ export class AgentOfficeViewProvider implements vscode.WebviewViewProvider {
       case 'subagentPermissionRequired':
         this.webview.postMessage({
           type: 'subagentToolPermission',
+          id: event.agentId,
+          parentToolId: event.parentToolId,
+        });
+        break;
+      case 'subagentPermissionCleared':
+        this.webview.postMessage({
+          type: 'subagentToolPermissionClear',
           id: event.agentId,
           parentToolId: event.parentToolId,
         });
@@ -491,6 +502,9 @@ export class AgentOfficeViewProvider implements vscode.WebviewViewProvider {
             if (this.activeAgentId.current === id) {
               this.activeAgentId.current = null;
             }
+            if (agent.backendId === 'codex') {
+              cleanupCodexSubagentsForAgent(id, this.emitBackendEvent);
+            }
             removeAgent(
               id,
               this.agents,
@@ -515,6 +529,7 @@ export class AgentOfficeViewProvider implements vscode.WebviewViewProvider {
     this.activeTerminalListener = null;
     this.closeTerminalListener?.dispose();
     this.closeTerminalListener = null;
+    disposeCodexSubagentState(this.emitBackendEvent);
     for (const id of [...this.agents.keys()]) {
       removeAgent(
         id,

@@ -65,7 +65,7 @@
     "check-types": "tsc --noEmit",
     "test:host": "node --import tsx --test src/backends/codex/*.test.ts",
     "test:webview": "cd webview-ui && npm run test",
-    "test": "npm run test:webview",
+    "test": "npm-run-all -s test:host test:webview",
     "prepare": "husky",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
