@@ -30,9 +30,7 @@ This is the source code for the Agent Office VS Code extension. Agent Office is 
 
 ## Quick Install
 
-The easiest install path for most users is the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=pablodelucca.pixel-agents).
-
-If you want to install directly from GitHub instead:
+To install directly from GitHub:
 
 1. Click **Download Latest VSIX** above, or open the [latest release](https://github.com/DebisLimbuHub/Agent-Office/releases/latest)
 2. Under **Assets**, click the file that ends in `.vsix`, such as `agent-office-v1.1.2.vsix`
