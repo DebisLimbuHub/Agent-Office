@@ -1,5 +1,4 @@
 import {
-  DANCE_FRAME_DURATION_SEC,
   SEAT_REST_MAX_SEC,
   SEAT_REST_MIN_SEC,
   TYPE_FRAME_DURATION_SEC,
@@ -111,8 +110,10 @@ export function updateCharacter(
           break;
         }
         ch.seatTimer = 0; // clear sentinel
-        enterDanceState(ch);
-        ch.wanderTimer = randomRange(WANDER_PAUSE_MIN_SEC, WANDER_PAUSE_MAX_SEC);
+        enterIdleState(ch);
+        if (ch.wanderTimer <= 0) {
+          ch.wanderTimer = randomRange(WANDER_PAUSE_MIN_SEC, WANDER_PAUSE_MAX_SEC);
+        }
         ch.wanderCount = 0;
         ch.wanderLimit = randomInt(WANDER_MOVES_BEFORE_REST_MIN, WANDER_MOVES_BEFORE_REST_MAX);
       }
@@ -137,21 +138,13 @@ export function updateCharacter(
     }
 
     case CharacterState.DANCE: {
-      ch.danceTimer += dt;
-      if (ch.frameTimer >= DANCE_FRAME_DURATION_SEC) {
-        ch.frameTimer -= DANCE_FRAME_DURATION_SEC;
-        ch.frame = (ch.frame + 1) % 4;
-      }
-      ch.dir = ch.frame < 2 ? Direction.LEFT : Direction.RIGHT;
-      if (ch.seatTimer < 0) ch.seatTimer = 0;
-
       if (transitionToActiveWork(ch, seats, tileMap, blockedTiles)) {
         break;
       }
 
-      ch.wanderTimer -= dt;
+      // Legacy safety: collapse any stale dance state into the normal idle roam loop.
+      enterIdleState(ch);
       if (ch.wanderTimer <= 0) {
-        maybeStartWander(ch, walkableTiles, seats, tileMap, blockedTiles);
         ch.wanderTimer = randomRange(WANDER_PAUSE_MIN_SEC, WANDER_PAUSE_MAX_SEC);
       }
       break;
@@ -203,8 +196,10 @@ export function updateCharacter(
               break;
             }
           }
-          enterDanceState(ch);
-          ch.wanderTimer = randomRange(WANDER_PAUSE_MIN_SEC, WANDER_PAUSE_MAX_SEC);
+          enterIdleState(ch);
+          if (ch.wanderTimer <= 0) {
+            ch.wanderTimer = randomRange(WANDER_PAUSE_MIN_SEC, WANDER_PAUSE_MAX_SEC);
+          }
         }
         break;
       }
@@ -292,13 +287,6 @@ function enterTypeState(ch: Character, dir?: Direction): void {
 
 function enterIdleState(ch: Character): void {
   ch.state = CharacterState.IDLE;
-  ch.danceTimer = 0;
-  resetAnimation(ch);
-}
-
-function enterDanceState(ch: Character): void {
-  ch.state = CharacterState.DANCE;
-  ch.dir = Direction.LEFT;
   ch.danceTimer = 0;
   resetAnimation(ch);
 }

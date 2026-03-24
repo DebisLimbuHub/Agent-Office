@@ -63,14 +63,30 @@ const tileMap: TileType[][] = [
 ];
 const blockedTiles = new Set<string>();
 
-test('inactive typing agents enter dance mode after their seat timer expires', () => {
+test('inactive typing agents settle into idle after their seat timer expires', () => {
   const ch = createTestCharacter();
 
   updateCharacter(ch, 0.016, walkableTiles, seats, tileMap, blockedTiles);
 
-  assert.equal(ch.state, CharacterState.DANCE);
+  assert.equal(ch.state, CharacterState.IDLE);
   assert.equal(ch.danceTimer, 0);
   assert.equal(ch.wanderCount, 0);
+});
+
+test('legacy dancing agents settle into idle immediately', () => {
+  const ch = createTestCharacter({
+    state: CharacterState.DANCE,
+    dir: Direction.LEFT,
+    danceTimer: 0,
+    wanderTimer: 1,
+    isActive: false,
+  });
+
+  updateCharacter(ch, 0.016, walkableTiles, seats, tileMap, blockedTiles);
+
+  assert.equal(ch.state, CharacterState.IDLE);
+  assert.equal(ch.danceTimer, 0);
+  assert.equal(ch.wanderTimer, 1);
 });
 
 test('dancing agents snap back into work when reactivated', () => {
