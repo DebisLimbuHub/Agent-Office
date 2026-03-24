@@ -161,6 +161,8 @@ export function useExtensionMessages(
         const folderName = msg.folderName as string | undefined;
         setAgents((prev) => (prev.includes(id) ? prev : [...prev, id]));
         setSelectedAgent(id);
+        os.selectedAgentId = id;
+        os.cameraFollowId = id;
         os.addAgent(id, undefined, undefined, undefined, undefined, folderName);
         saveAgentSeats(os);
       } else if (msg.type === 'agentClosed') {
@@ -274,18 +276,12 @@ export function useExtensionMessages(
       } else if (msg.type === 'agentSelected') {
         const id = msg.id as number;
         setSelectedAgent(id);
+        os.selectedAgentId = id;
+        os.cameraFollowId = id;
       } else if (msg.type === 'agentStatus') {
         const id = msg.id as number;
         const status = msg.status as string;
-        setAgentStatuses((prev) => {
-          if (status === 'active') {
-            if (!(id in prev)) return prev;
-            const next = { ...prev };
-            delete next[id];
-            return next;
-          }
-          return { ...prev, [id]: status };
-        });
+        setAgentStatuses((prev) => ({ ...prev, [id]: status }));
         os.setAgentActive(id, status === 'active');
         if (status === 'waiting') {
           os.showWaitingBubble(id);

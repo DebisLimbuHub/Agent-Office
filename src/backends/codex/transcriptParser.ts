@@ -158,6 +158,7 @@ function processEventMessage(
 
   switch (payload.type) {
     case 'user_message':
+    case 'task_started':
       beginTurn(agentId, agent, waitingTimers, permissionTimers, emitEvent);
       break;
     case 'task_complete': {

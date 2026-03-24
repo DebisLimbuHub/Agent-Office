@@ -9,6 +9,10 @@ import {
   BUTTON_RADIUS_ZOOM_FACTOR,
   CHARACTER_SITTING_OFFSET_PX,
   CHARACTER_Z_SORT_OFFSET,
+  DANCE_BOUNCE_AMPLITUDE_PX,
+  DANCE_BOUNCE_FREQUENCY_HZ,
+  DANCE_SWAY_AMPLITUDE_PX,
+  DANCE_SWAY_FREQUENCY_HZ,
   DELETE_BUTTON_BG,
   FALLBACK_FLOOR_COLOR,
   GHOST_BORDER_HOVER_FILL,
@@ -104,6 +108,25 @@ interface ZDrawable {
   draw: (ctx: CanvasRenderingContext2D) => void;
 }
 
+function drawSprite(
+  ctx: CanvasRenderingContext2D,
+  sprite: HTMLCanvasElement,
+  x: number,
+  y: number,
+  tilt = 0,
+): void {
+  if (tilt === 0) {
+    ctx.drawImage(sprite, x, y);
+    return;
+  }
+
+  ctx.save();
+  ctx.translate(x + sprite.width / 2, y + sprite.height);
+  ctx.rotate(tilt);
+  ctx.drawImage(sprite, -sprite.width / 2, -sprite.height);
+  ctx.restore();
+}
+
 export function renderScene(
   ctx: CanvasRenderingContext2D,
   furniture: FurnitureInstance[],
@@ -149,9 +172,29 @@ export function renderScene(
     const cached = getCachedSprite(spriteData, zoom);
     // Sitting offset: shift character down when seated so they visually sit in the chair
     const sittingOffset = ch.state === CharacterState.TYPE ? CHARACTER_SITTING_OFFSET_PX : 0;
+    const danceSway =
+      ch.state === CharacterState.DANCE
+        ? Math.round(
+            Math.sin(ch.danceTimer * DANCE_SWAY_FREQUENCY_HZ * Math.PI * 2) *
+              DANCE_SWAY_AMPLITUDE_PX *
+              zoom,
+          )
+        : 0;
+    const danceBounce =
+      ch.state === CharacterState.DANCE
+        ? Math.round(
+            Math.abs(Math.sin(ch.danceTimer * DANCE_BOUNCE_FREQUENCY_HZ * Math.PI * 2)) *
+              DANCE_BOUNCE_AMPLITUDE_PX *
+              zoom,
+          )
+        : 0;
+    const danceTilt =
+      ch.state === CharacterState.DANCE
+        ? Math.sin(ch.danceTimer * DANCE_SWAY_FREQUENCY_HZ * Math.PI * 2) * 0.12
+        : 0;
     // Anchor at bottom-center of character — round to integer device pixels
-    const drawX = Math.round(offsetX + ch.x * zoom - cached.width / 2);
-    const drawY = Math.round(offsetY + (ch.y + sittingOffset) * zoom - cached.height);
+    const drawX = Math.round(offsetX + ch.x * zoom - cached.width / 2) + danceSway;
+    const drawY = Math.round(offsetY + (ch.y + sittingOffset) * zoom - cached.height) - danceBounce;
 
     // Sort characters by bottom of their tile (not center) so they render
     // in front of same-row furniture (e.g. chairs) but behind furniture
@@ -187,7 +230,7 @@ export function renderScene(
         draw: (c) => {
           c.save();
           c.globalAlpha = outlineAlpha;
-          c.drawImage(outlineCached, olDrawX, olDrawY);
+          drawSprite(c, outlineCached, olDrawX, olDrawY, danceTilt);
           c.restore();
         },
       });
@@ -196,7 +239,7 @@ export function renderScene(
     drawables.push({
       zY: charZY,
       draw: (c) => {
-        c.drawImage(cached, drawX, drawY);
+        drawSprite(c, cached, drawX, drawY, danceTilt);
       },
     });
   }

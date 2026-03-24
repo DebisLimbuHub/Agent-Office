@@ -1,4 +1,5 @@
 import {
+  DANCE_FRAME_DURATION_SEC,
   SEAT_REST_MAX_SEC,
   SEAT_REST_MIN_SEC,
   TYPE_FRAME_DURATION_SEC,
@@ -70,6 +71,7 @@ export function createCharacter(
     hueShift,
     frame: 0,
     frameTimer: 0,
+    danceTimer: 0,
     wanderTimer: 0,
     wanderCount: 0,
     wanderLimit: randomInt(WANDER_MOVES_BEFORE_REST_MIN, WANDER_MOVES_BEFORE_REST_MAX),
@@ -109,9 +111,7 @@ export function updateCharacter(
           break;
         }
         ch.seatTimer = 0; // clear sentinel
-        ch.state = CharacterState.IDLE;
-        ch.frame = 0;
-        ch.frameTimer = 0;
+        enterDanceState(ch);
         ch.wanderTimer = randomRange(WANDER_PAUSE_MIN_SEC, WANDER_PAUSE_MAX_SEC);
         ch.wanderCount = 0;
         ch.wanderLimit = randomInt(WANDER_MOVES_BEFORE_REST_MIN, WANDER_MOVES_BEFORE_REST_MAX);
@@ -124,84 +124,34 @@ export function updateCharacter(
       ch.frame = 0;
       if (ch.seatTimer < 0) ch.seatTimer = 0; // clear turn-end sentinel
       // If became active, pathfind to seat
-      if (ch.isActive) {
-        if (!ch.seatId) {
-          // No seat assigned — type in place
-          ch.state = CharacterState.TYPE;
-          ch.frame = 0;
-          ch.frameTimer = 0;
-          break;
-        }
-        const seat = seats.get(ch.seatId);
-        if (seat) {
-          const path = findPath(
-            ch.tileCol,
-            ch.tileRow,
-            seat.seatCol,
-            seat.seatRow,
-            tileMap,
-            blockedTiles,
-          );
-          if (path.length > 0) {
-            ch.path = path;
-            ch.moveProgress = 0;
-            ch.state = CharacterState.WALK;
-            ch.frame = 0;
-            ch.frameTimer = 0;
-          } else {
-            // Already at seat or no path — sit down
-            ch.state = CharacterState.TYPE;
-            ch.dir = seat.facingDir;
-            ch.frame = 0;
-            ch.frameTimer = 0;
-          }
-        }
+      if (transitionToActiveWork(ch, seats, tileMap, blockedTiles)) {
         break;
       }
       // Countdown wander timer
       ch.wanderTimer -= dt;
       if (ch.wanderTimer <= 0) {
-        // Check if we've wandered enough — return to seat for a rest
-        if (ch.wanderCount >= ch.wanderLimit && ch.seatId) {
-          const seat = seats.get(ch.seatId);
-          if (seat) {
-            const path = findPath(
-              ch.tileCol,
-              ch.tileRow,
-              seat.seatCol,
-              seat.seatRow,
-              tileMap,
-              blockedTiles,
-            );
-            if (path.length > 0) {
-              ch.path = path;
-              ch.moveProgress = 0;
-              ch.state = CharacterState.WALK;
-              ch.frame = 0;
-              ch.frameTimer = 0;
-              break;
-            }
-          }
-        }
-        if (walkableTiles.length > 0) {
-          const target = walkableTiles[Math.floor(Math.random() * walkableTiles.length)];
-          const path = findPath(
-            ch.tileCol,
-            ch.tileRow,
-            target.col,
-            target.row,
-            tileMap,
-            blockedTiles,
-          );
-          if (path.length > 0) {
-            ch.path = path;
-            ch.moveProgress = 0;
-            ch.state = CharacterState.WALK;
-            ch.frame = 0;
-            ch.frameTimer = 0;
-            ch.wanderCount++;
-          }
-        }
+        maybeStartWander(ch, walkableTiles, seats, tileMap, blockedTiles);
+        ch.wanderTimer = randomRange(WANDER_PAUSE_MIN_SEC, WANDER_PAUSE_MAX_SEC);
+      }
+      break;
+    }
+
+    case CharacterState.DANCE: {
+      ch.danceTimer += dt;
+      if (ch.frameTimer >= DANCE_FRAME_DURATION_SEC) {
+        ch.frameTimer -= DANCE_FRAME_DURATION_SEC;
+        ch.frame = (ch.frame + 1) % 4;
+      }
+      ch.dir = ch.frame < 2 ? Direction.LEFT : Direction.RIGHT;
+      if (ch.seatTimer < 0) ch.seatTimer = 0;
+
+      if (transitionToActiveWork(ch, seats, tileMap, blockedTiles)) {
+        break;
+      }
+
+      ch.wanderTimer -= dt;
+      if (ch.wanderTimer <= 0) {
+        maybeStartWander(ch, walkableTiles, seats, tileMap, blockedTiles);
         ch.wanderTimer = randomRange(WANDER_PAUSE_MIN_SEC, WANDER_PAUSE_MAX_SEC);
       }
       break;
@@ -223,14 +173,13 @@ export function updateCharacter(
         if (ch.isActive) {
           if (!ch.seatId) {
             // No seat — type in place
-            ch.state = CharacterState.TYPE;
+            enterTypeState(ch);
           } else {
             const seat = seats.get(ch.seatId);
             if (seat && ch.tileCol === seat.seatCol && ch.tileRow === seat.seatRow) {
-              ch.state = CharacterState.TYPE;
-              ch.dir = seat.facingDir;
+              enterTypeState(ch, seat.facingDir);
             } else {
-              ch.state = CharacterState.IDLE;
+              enterIdleState(ch);
             }
           }
         } else {
@@ -238,8 +187,7 @@ export function updateCharacter(
           if (ch.seatId) {
             const seat = seats.get(ch.seatId);
             if (seat && ch.tileCol === seat.seatCol && ch.tileRow === seat.seatRow) {
-              ch.state = CharacterState.TYPE;
-              ch.dir = seat.facingDir;
+              enterTypeState(ch, seat.facingDir);
               // seatTimer < 0 is a sentinel from setAgentActive(false) meaning
               // "turn just ended" — skip the long rest so idle transition is immediate
               if (ch.seatTimer < 0) {
@@ -252,16 +200,12 @@ export function updateCharacter(
                 WANDER_MOVES_BEFORE_REST_MIN,
                 WANDER_MOVES_BEFORE_REST_MAX,
               );
-              ch.frame = 0;
-              ch.frameTimer = 0;
               break;
             }
           }
-          ch.state = CharacterState.IDLE;
+          enterDanceState(ch);
           ch.wanderTimer = randomRange(WANDER_PAUSE_MIN_SEC, WANDER_PAUSE_MAX_SEC);
         }
-        ch.frame = 0;
-        ch.frameTimer = 0;
         break;
       }
 
@@ -323,10 +267,110 @@ export function getCharacterSprite(ch: Character, sprites: CharacterSprites): Sp
       return sprites.typing[ch.dir][ch.frame % 2];
     case CharacterState.WALK:
       return sprites.walk[ch.dir][ch.frame % 4];
+    case CharacterState.DANCE:
+      return sprites.walk[ch.dir][ch.frame % 4];
     case CharacterState.IDLE:
       return sprites.walk[ch.dir][1];
     default:
       return sprites.walk[ch.dir][1];
+  }
+}
+
+function resetAnimation(ch: Character): void {
+  ch.frame = 0;
+  ch.frameTimer = 0;
+}
+
+function enterTypeState(ch: Character, dir?: Direction): void {
+  ch.state = CharacterState.TYPE;
+  if (dir !== undefined) {
+    ch.dir = dir;
+  }
+  ch.danceTimer = 0;
+  resetAnimation(ch);
+}
+
+function enterIdleState(ch: Character): void {
+  ch.state = CharacterState.IDLE;
+  ch.danceTimer = 0;
+  resetAnimation(ch);
+}
+
+function enterDanceState(ch: Character): void {
+  ch.state = CharacterState.DANCE;
+  ch.dir = Direction.LEFT;
+  ch.danceTimer = 0;
+  resetAnimation(ch);
+}
+
+function enterWalkState(ch: Character, path: Array<{ col: number; row: number }>): void {
+  ch.path = path;
+  ch.moveProgress = 0;
+  ch.state = CharacterState.WALK;
+  ch.danceTimer = 0;
+  resetAnimation(ch);
+}
+
+function transitionToActiveWork(
+  ch: Character,
+  seats: Map<string, Seat>,
+  tileMap: TileTypeVal[][],
+  blockedTiles: Set<string>,
+): boolean {
+  if (!ch.isActive) return false;
+
+  if (!ch.seatId) {
+    enterTypeState(ch);
+    return true;
+  }
+
+  const seat = seats.get(ch.seatId);
+  if (!seat) {
+    enterTypeState(ch);
+    return true;
+  }
+
+  const path = findPath(ch.tileCol, ch.tileRow, seat.seatCol, seat.seatRow, tileMap, blockedTiles);
+  if (path.length > 0) {
+    enterWalkState(ch, path);
+  } else {
+    enterTypeState(ch, seat.facingDir);
+  }
+  return true;
+}
+
+function maybeStartWander(
+  ch: Character,
+  walkableTiles: Array<{ col: number; row: number }>,
+  seats: Map<string, Seat>,
+  tileMap: TileTypeVal[][],
+  blockedTiles: Set<string>,
+): void {
+  if (ch.wanderCount >= ch.wanderLimit && ch.seatId) {
+    const seat = seats.get(ch.seatId);
+    if (seat) {
+      const path = findPath(
+        ch.tileCol,
+        ch.tileRow,
+        seat.seatCol,
+        seat.seatRow,
+        tileMap,
+        blockedTiles,
+      );
+      if (path.length > 0) {
+        enterWalkState(ch, path);
+        return;
+      }
+    }
+  }
+
+  if (walkableTiles.length === 0) return;
+
+  const target = walkableTiles[Math.floor(Math.random() * walkableTiles.length)];
+  const path = findPath(ch.tileCol, ch.tileRow, target.col, target.row, tileMap, blockedTiles);
+  if (path.length > 0) {
+    enterWalkState(ch, path);
+    ch.wanderCount++;
   }
 }
 

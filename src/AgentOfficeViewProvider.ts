@@ -276,8 +276,14 @@ export class AgentOfficeViewProvider implements vscode.WebviewViewProvider {
           );
           return;
         }
+        const workspaceFolderPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        const fallbackFolderPath =
+          this.context.extensionMode === vscode.ExtensionMode.Development
+            ? this.extensionUri.fsPath
+            : undefined;
         await provider.createSession(this.hostRuntime, {
-          folderPath: message.folderPath as string | undefined,
+          folderPath:
+            (message.folderPath as string | undefined) ?? workspaceFolderPath ?? fallbackFolderPath,
           bypassPermissions: message.bypassPermissions as boolean | undefined,
         });
       } else if (message.type === 'focusAgent') {

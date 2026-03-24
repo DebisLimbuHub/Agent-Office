@@ -676,15 +676,14 @@ export function OfficeCanvas({
       if (hitId !== null) {
         // Dismiss any active bubble on click
         officeState.dismissBubble(hitId);
-        // Toggle selection: click same agent deselects, different agent selects
+        // First click selects and keeps the user in the office.
+        // Clicking the already-selected agent focuses its terminal.
         if (officeState.selectedAgentId === hitId) {
-          officeState.selectedAgentId = null;
-          officeState.cameraFollowId = null;
+          onClick(hitId);
         } else {
           officeState.selectedAgentId = hitId;
           officeState.cameraFollowId = hitId;
         }
-        onClick(hitId); // still focus terminal
         return;
       }
 

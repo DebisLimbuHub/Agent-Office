@@ -40,6 +40,7 @@ export const CharacterState = {
   IDLE: 'idle',
   WALK: 'walk',
   TYPE: 'type',
+  DANCE: 'dance',
 } as const;
 export type CharacterState = (typeof CharacterState)[keyof typeof CharacterState];
 
@@ -162,6 +163,8 @@ export interface Character {
   frame: number;
   /** Time accumulator for animation */
   frameTimer: number;
+  /** Time accumulator for dance motion */
+  danceTimer: number;
   /** Timer for idle wander decisions */
   wanderTimer: number;
   /** Number of wander moves completed in current roaming cycle */

@@ -126,6 +126,43 @@ test('Codex parser maps exec_command lifecycle to tool and waiting events', asyn
   }
 });
 
+test('Codex parser treats task_started as an active turn', () => {
+  const agents = new Map([
+    [
+      1,
+      {
+        ...createAgentState(),
+        isWaiting: true,
+      },
+    ],
+  ]);
+  const waitingTimers = new Map<number, ReturnType<typeof setTimeout>>();
+  const permissionTimers = new Map<number, ReturnType<typeof setTimeout>>();
+  const events: BackendEvent[] = [];
+
+  try {
+    processTranscriptLine(
+      1,
+      JSON.stringify({ type: 'event_msg', payload: { type: 'task_started' } }),
+      agents,
+      waitingTimers,
+      permissionTimers,
+      (event) => events.push(event),
+    );
+
+    assert.equal(agents.get(1)?.isWaiting, false);
+    assert.deepEqual(events.at(-1), { type: 'statusChanged', agentId: 1, status: 'active' });
+  } finally {
+    disposeCodexSubagentState();
+    for (const timer of waitingTimers.values()) {
+      clearTimeout(timer);
+    }
+    for (const timer of permissionTimers.values()) {
+      clearTimeout(timer);
+    }
+  }
+});
+
 test('Codex parser formats spawn_agent as a delegation tool', () => {
   const agents = new Map([[1, createAgentState()]]);
   const waitingTimers = new Map<number, ReturnType<typeof setTimeout>>();

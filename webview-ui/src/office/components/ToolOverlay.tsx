@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { CHARACTER_SITTING_OFFSET_PX, TOOL_OVERLAY_VERTICAL_OFFSET } from '../../constants.js';
 import type { SubagentCharacter } from '../../hooks/useExtensionMessages.js';
+import { getActivityText } from '../activityText.js';
 import type { OfficeState } from '../engine/officeState.js';
 import type { ToolActivity } from '../types.js';
 import { CharacterState, TILE_SIZE } from '../types.js';
@@ -10,6 +11,7 @@ interface ToolOverlayProps {
   officeState: OfficeState;
   agents: number[];
   agentTools: Record<number, ToolActivity[]>;
+  agentStatuses: Record<number, string>;
   subagentCharacters: SubagentCharacter[];
   containerRef: React.RefObject<HTMLDivElement | null>;
   zoom: number;
@@ -18,34 +20,11 @@ interface ToolOverlayProps {
   alwaysShowOverlay: boolean;
 }
 
-/** Derive a short human-readable activity string from tools/status */
-function getActivityText(
-  agentId: number,
-  agentTools: Record<number, ToolActivity[]>,
-  isActive: boolean,
-): string {
-  const tools = agentTools[agentId];
-  if (tools && tools.length > 0) {
-    // Find the latest non-done tool
-    const activeTool = [...tools].reverse().find((t) => !t.done);
-    if (activeTool) {
-      if (activeTool.permissionWait) return 'Needs approval';
-      return activeTool.status;
-    }
-    // All tools done but agent still active (mid-turn) — keep showing last tool status
-    if (isActive) {
-      const lastTool = tools[tools.length - 1];
-      if (lastTool) return lastTool.status;
-    }
-  }
-
-  return 'Idle';
-}
-
 export function ToolOverlay({
   officeState,
   agents,
   agentTools,
+  agentStatuses,
   subagentCharacters,
   containerRef,
   zoom,
@@ -112,19 +91,22 @@ export function ToolOverlay({
             activityText = sub ? sub.label : 'Subtask';
           }
         } else {
-          activityText = getActivityText(id, agentTools, ch.isActive);
+          activityText = getActivityText(id, agentTools, agentStatuses[id], ch.currentTool);
         }
 
         // Determine dot color
         const tools = agentTools[id];
         const hasPermission = subHasPermission || tools?.some((t) => t.permissionWait && !t.done);
         const hasActiveTools = tools?.some((t) => !t.done);
-        const isActive = ch.isActive;
+        const isWaiting = agentStatuses[id] === 'waiting';
+        const hasActiveStatus = agentStatuses[id] === 'active';
 
         let dotColor: string | null = null;
         if (hasPermission) {
           dotColor = 'var(--pixel-status-permission)';
-        } else if (isActive && hasActiveTools) {
+        } else if (isWaiting) {
+          dotColor = 'var(--vscode-charts-yellow, #cca700)';
+        } else if (hasActiveStatus || hasActiveTools) {
           dotColor = 'var(--pixel-status-active)';
         }
 
@@ -162,7 +144,11 @@ export function ToolOverlay({
             >
               {dotColor && (
                 <span
-                  className={isActive && !hasPermission ? 'agent-office-pulse' : undefined}
+                  className={
+                    (hasActiveStatus || hasActiveTools) && !hasPermission
+                      ? 'agent-office-pulse'
+                      : undefined
+                  }
                   style={{
                     width: 6,
                     height: 6,

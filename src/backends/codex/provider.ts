@@ -77,6 +77,13 @@ function getFolderNameForPath(sessionCwd: string): string | undefined {
 }
 
 function isRelevantWorkspaceSession(sessionCwd: string): boolean {
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folders || folders.length === 0) {
+    // Extension dev hosts can be launched without opening a folder. In that case,
+    // allow transcript discovery to attach to the sessions we just started.
+    return true;
+  }
+
   return !!getWorkspaceFolderForPath(sessionCwd);
 }
 
