@@ -15,7 +15,7 @@
 </div>
 
 <div align="center">
-<a href="https://marketplace.visualstudio.com/items?itemName=pablodelucca.pixel-agents">VS Code Marketplace</a> • <a href="https://github.com/DebisLimbuHub/Agent-Office/releases/latest">Download Latest VSIX</a> • <a href="https://github.com/DebisLimbuHub/Agent-Office/discussions">Discussions</a> • <a href="https://github.com/DebisLimbuHub/Agent-Office/issues">Issues</a> • <a href="CONTRIBUTING.md">Contributing</a> • <a href="CHANGELOG.md">Changelog</a>
+<a href="https://marketplace.visualstudio.com/items?itemName=pablodelucca.pixel-agents">VS Code Marketplace</a> • <a href="https://github.com/DebisLimbuHub/Agent-Office/releases/latest">Download Latest VSIX</a> • <a href="CONTRIBUTING.md">Contributing</a> • <a href="CHANGELOG.md">Changelog</a>
 </div>
 
 <br/>
@@ -26,35 +26,19 @@ Right now it works as a VS Code extension with built-in Codex CLI and Claude Cod
 
 This is the source code for the Agent Office VS Code extension. Agent Office is a fork and rebrand of the original `pixel-agents` project by Pablo De Lucca. During this first-pass rebrand, the published package identifiers still use the original `pixel-agents` name for compatibility: [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=pablodelucca.pixel-agents) and [Open VSX](https://open-vsx.org/extension/pablodelucca/pixel-agents).
 
+![Agent Office screenshot](webview-ui/public/Screenshot.jpg)
+
 ## Quick Install
 
-To download from GitHub:
+The easiest install path for most users is the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=pablodelucca.pixel-agents).
+
+If you want to install directly from GitHub instead:
 
 1. Click **Download Latest VSIX** above, or open the [latest release](https://github.com/DebisLimbuHub/Agent-Office/releases/latest)
-2. In the release page, under **Assets**, download the `.vsix` file
+2. Under **Assets**, download the latest `.vsix` file
 3. In VS Code, open the Command Palette and run **Extensions: Install from VSIX...**
 4. Select the downloaded `.vsix` file
 5. Reload VS Code when prompted
-
-If you prefer, you can also install it directly from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=pablodelucca.pixel-agents).
-
-![Agent Office screenshot](webview-ui/public/Screenshot.jpg)
-
-## Features
-
-- **One agent, one character** — every agent terminal gets its own animated character
-- **Live activity tracking** — characters animate based on what the agent is actually doing (writing, reading, running commands)
-- **Office layout editor** — design your office with floors, walls, and furniture using a built-in editor
-- **Speech bubbles** — visual indicators when an agent is waiting for input or needs permission
-- **Sound notifications** — optional chime when an agent finishes its turn
-- **Sub-agent visualization** — nested subtasks can appear as separate characters linked to their parent
-- **Persistent layouts** — your office design is saved and shared across VS Code windows
-- **External asset directories** — load custom or third-party furniture packs from any folder on your machine
-- **Diverse characters** — 6 diverse characters. These are based on the amazing work of [JIK-A-4, Metro City](https://jik-a-4.itch.io/metrocity-free-topdown-character-pack).
-
-<p align="center">
-  <img src="webview-ui/public/characters.png" alt="Agent Office characters" width="320" height="72" style="image-rendering: pixelated;">
-</p>
 
 ## Requirements
 
@@ -63,24 +47,57 @@ If you prefer, you can also install it directly from the [VS Code Marketplace](h
 
 Today, the built-in providers are Codex CLI and Claude Code. Codex is the default built-in backend path in the extension, while the product direction and UI architecture remain intentionally backend-neutral.
 
+## Features
+
+- **One agent, one character** - every agent terminal gets its own animated character
+- **Live activity tracking** - characters animate based on what the agent is actually doing
+- **Office layout editor** - design your office with floors, walls, and furniture using the built-in editor
+- **Speech bubbles** - visual indicators when an agent is waiting for input or needs permission
+- **Sound notifications** - optional chime when an agent finishes its turn
+- **Sub-agent visualization** - nested subtasks can appear as separate characters linked to their parent
+- **Persistent layouts** - your office design is saved and shared across VS Code windows
+- **External asset directories** - load custom or third-party furniture packs from any folder on your machine
+- **Diverse characters** - six included characters based on [JIK-A-4, Metro City](https://jik-a-4.itch.io/metrocity-free-topdown-character-pack)
+
+<p align="center">
+  <img src="webview-ui/public/characters.png" alt="Agent Office characters" width="320" height="72" style="image-rendering: pixelated;">
+</p>
+
 ## Getting Started
 
-If you just want to use Agent Office, the easiest way is to download the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=pablodelucca.pixel-agents). If you want to play with the code, develop, or contribute, then:
+1. Open the **Agent Office** panel in the bottom panel area of VS Code
+2. Click **+ Agent** to spawn a new agent terminal and its character
+3. Start working with the agent and watch the character react in real time
+4. Click a character to select it, then click a seat to reassign it
+5. Click **Layout** to open the office editor and customize your space
 
-### Install from GitHub Releases
+Agent Office launches Codex by default. Use the backend menu to switch providers. Right-click for the selected backend's bypass-permissions option when available.
 
-If you want people to install the extension directly from GitHub instead of cloning the source code, publish a GitHub Release with the packaged `.vsix` file attached. This repository is set up so every published GitHub Release can attach that `.vsix` automatically.
+## Customize Your Office
 
-Users can then:
+The built-in editor lets you design your office with:
 
-1. Open the repo's [latest release](https://github.com/DebisLimbuHub/Agent-Office/releases/latest)
-2. Under **Assets**, download the latest `.vsix` file
-3. In VS Code, run **Extensions: Install from VSIX...**
-4. Select the downloaded file and reload VS Code
+- **Floor colors** - full HSB color control
+- **Walls** - auto-tiling walls with color customization
+- **Tools** - select, paint, erase, place, eyedropper, and pick
+- **Undo and redo** - 50 levels with Ctrl+Z / Ctrl+Y
+- **Export and import** - share layouts as JSON files via the Settings modal
 
-Downloading the repository source code is mainly for development. Normal users should install either from the VS Code Marketplace or from a release `.vsix`.
+The grid is expandable up to 64x64 tiles. Click the ghost border outside the current grid to grow it.
 
-### Install from source
+### Office Assets
+
+All office assets (furniture, floors, walls) are open source and included in this repository under `webview-ui/public/assets/`. No external purchases or imports are needed to get started.
+
+Each furniture item lives in its own folder under `webview-ui/public/assets/furniture/` with a `manifest.json` that declares its sprites, rotation groups, state groups, and animation frames. Floor tiles live in `webview-ui/public/assets/floors/`, and wall tile sets live in `webview-ui/public/assets/walls/`.
+
+To use furniture from an external directory, open Settings -> **Add Asset Directory**. See [docs/external-assets.md](docs/external-assets.md) for the full manifest format and how to use third-party asset packs.
+
+Characters are based on the amazing work of [JIK-A-4, Metro City](https://jik-a-4.itch.io/metrocity-free-topdown-character-pack).
+
+## Development
+
+If you want to build or contribute to Agent Office from source:
 
 ```bash
 git clone https://github.com/DebisLimbuHub/Agent-Office.git
@@ -93,55 +110,6 @@ npm run build
 Then press **F5** in VS Code to launch the Extension Development Host.
 
 For a headless smoke check on Linux, run `npm run smoke:vscode`. It launches an isolated VS Code instance under Xvfb with its own temporary `--user-data-dir`, opens **Agent Office: Show Panel**, captures a screenshot, and only cleans up processes tied to that temporary root.
-
-## Releasing on GitHub
-
-This repository already includes a GitHub Actions workflow at `.github/workflows/publish-extension.yml` that packages the extension, uploads the generated `.vsix` file to the GitHub Release, and optionally publishes to the marketplaces when the required tokens are configured.
-
-To make GitHub downloads work for end users:
-
-1. Bump the version in `package.json`
-2. Create and publish a GitHub Release
-3. Let the workflow attach the built `.vsix` file to that release
-
-If you also want automatic marketplace publishing:
-
-1. Add the repository secret `VSCE_PAT` for the Visual Studio Marketplace publisher account
-2. Add the repository secret `OPEN_VSX_TOKEN` for the Open VSX publisher account
-
-After that, users can install from either the Marketplace link or the GitHub Release asset. You can also run the workflow manually with `dry_run` enabled to build a `.vsix` and download it from the Actions artifact without publishing it anywhere.
-
-### Usage
-
-1. Open the **Agent Office** panel (it appears in the bottom panel area alongside your terminal)
-2. Click **+ Agent** to spawn a new agent terminal and its character. Agent Office launches Codex by default; use the backend menu to switch providers. Right-click for the selected backend's bypass-permissions option when available
-3. Start working with the agent and watch the character react in real time
-4. Click a character to select it, then click a seat to reassign it
-5. Click **Layout** to open the office editor and customize your space
-
-## Layout Editor
-
-The built-in editor lets you design your office:
-
-- **Floor** — Full HSB color control
-- **Walls** — Auto-tiling walls with color customization
-- **Tools** — Select, paint, erase, place, eyedropper, pick
-- **Undo/Redo** — 50 levels with Ctrl+Z / Ctrl+Y
-- **Export/Import** — Share layouts as JSON files via the Settings modal
-
-The grid is expandable up to 64×64 tiles. Click the ghost border outside the current grid to grow it.
-
-### Office Assets
-
-All office assets (furniture, floors, walls) are now **fully open-source** and included in this repository under `webview-ui/public/assets/`. No external purchases or imports are needed — everything works out of the box.
-
-Each furniture item lives in its own folder under `webview-ui/public/assets/furniture/` with a `manifest.json` that declares its sprites, rotation groups, state groups (on/off), and animation frames. Floor tiles live in `webview-ui/public/assets/floors/`, and wall tile sets live in `webview-ui/public/assets/walls/`. This modular structure makes it easy to add, remove, or modify assets without touching any code.
-
-To add a new furniture item, create a folder in `webview-ui/public/assets/furniture/` with your PNG sprite(s) and a `manifest.json`, then rebuild. The asset manager (`scripts/asset-manager.html`) provides a visual editor for creating and editing manifests.
-
-To use furniture from an external directory, open Settings → **Add Asset Directory**. See [docs/external-assets.md](docs/external-assets.md) for the full manifest format and how to use third-party asset packs.
-
-Characters are based on the amazing work of [JIK-A-4, Metro City](https://jik-a-4.itch.io/metrocity-free-topdown-character-pack).
 
 ## How It Works
 
