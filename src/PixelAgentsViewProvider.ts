@@ -55,6 +55,8 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
 
   private assetsRoot: string | null = null;
   layoutWatcher: LayoutWatcher | null = null;
+  private activeTerminalListener: vscode.Disposable | null = null;
+  private closeTerminalListener: vscode.Disposable | null = null;
 
   constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -403,38 +405,7 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
       }
     });
 
-    vscode.window.onDidChangeActiveTerminal((terminal) => {
-      this.activeAgentId.current = null;
-      if (!terminal) return;
-      for (const [id, agent] of this.agents) {
-        if (agent.terminalRef === terminal) {
-          this.activeAgentId.current = id;
-          webviewView.webview.postMessage({ type: 'agentSelected', id });
-          break;
-        }
-      }
-    });
-
-    vscode.window.onDidCloseTerminal((closedTerminal) => {
-      for (const [id, agent] of this.agents) {
-        if (agent.terminalRef === closedTerminal) {
-          if (this.activeAgentId.current === id) {
-            this.activeAgentId.current = null;
-          }
-          removeAgent(
-            id,
-            this.agents,
-            this.fileWatchers,
-            this.pollingTimers,
-            this.waitingTimers,
-            this.permissionTimers,
-            this.jsonlPollTimers,
-            this.persistAgents,
-          );
-          this.emitBackendEvent({ type: 'sessionClosed', agentId: id });
-        }
-      }
-    });
+    this.ensureWindowListeners();
   }
 
   exportDefaultLayout(): void {
@@ -504,9 +475,52 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  dispose() {
+  private ensureWindowListeners(): void {
+    if (!this.activeTerminalListener) {
+      this.activeTerminalListener = vscode.window.onDidChangeActiveTerminal((terminal) => {
+        this.activeAgentId.current = null;
+        if (!terminal) return;
+        for (const [id, agent] of this.agents) {
+          if (agent.terminalRef === terminal) {
+            this.activeAgentId.current = id;
+            this.webview?.postMessage({ type: 'agentSelected', id });
+            break;
+          }
+        }
+      });
+    }
+
+    if (!this.closeTerminalListener) {
+      this.closeTerminalListener = vscode.window.onDidCloseTerminal((closedTerminal) => {
+        for (const [id, agent] of this.agents) {
+          if (agent.terminalRef === closedTerminal) {
+            if (this.activeAgentId.current === id) {
+              this.activeAgentId.current = null;
+            }
+            removeAgent(
+              id,
+              this.agents,
+              this.fileWatchers,
+              this.pollingTimers,
+              this.waitingTimers,
+              this.permissionTimers,
+              this.jsonlPollTimers,
+              this.persistAgents,
+            );
+            this.emitBackendEvent({ type: 'sessionClosed', agentId: id });
+          }
+        }
+      });
+    }
+  }
+
+  dispose(): void {
     this.layoutWatcher?.dispose();
     this.layoutWatcher = null;
+    this.activeTerminalListener?.dispose();
+    this.activeTerminalListener = null;
+    this.closeTerminalListener?.dispose();
+    this.closeTerminalListener = null;
     for (const id of [...this.agents.keys()]) {
       removeAgent(
         id,

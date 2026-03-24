@@ -8,6 +8,10 @@
     "type": "git",
     "url": "https://github.com/DebisLimbuHub/Agent-Office"
   },
+  "homepage": "https://github.com/DebisLimbuHub/Agent-Office#readme",
+  "bugs": {
+    "url": "https://github.com/DebisLimbuHub/Agent-Office/issues"
+  },
   "icon": "icon.png",
   "license": "MIT",
   "engines": {
@@ -56,14 +60,16 @@
     "watch": "npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "watch:webview": "cd webview-ui && npm run build -- --watch",
     "package": "npm run check-types && npm run lint && node esbuild.js --production && npm run build:webview",
     "check-types": "tsc --noEmit",
+    "test:webview": "cd webview-ui && npm run test",
+    "test": "npm run test:webview",
     "prepare": "husky",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "lint:webview": "cd webview-ui && npm run lint",
     "lint:webview:fix": "cd webview-ui && eslint . --fix",
-    "import-tileset": "tsx scripts/import-tileset-cli.ts",
     "format": "prettier --write \"src/**/*.ts\" \"webview-ui/src/**/*.{ts,tsx,css}\" \"*.{js,mjs}\" \"webview-ui/*.{js,ts}\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"webview-ui/src/**/*.{ts,tsx,css}\" \"*.{js,mjs}\" \"webview-ui/*.{js,ts}\""
   },
