@@ -2,7 +2,7 @@
   "name": "pixel-agents",
   "displayName": "Agent Office",
   "description": "Agent Office is a pixel art workspace where your agents come to life as animated characters",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "publisher": "pablodelucca",
   "repository": {
     "type": "git",
