@@ -38,6 +38,9 @@ To install directly from GitHub:
 4. In VS Code, open the Command Palette and run **Extensions: Install from VSIX...**
 5. Select the downloaded `.vsix` file
 6. Reload VS Code when prompted
+7. Press `Ctrl+Shift+P` to open the Command Palette
+8. Search for **Agent Office: Show Panel** and select it
+9. Agent Office will open in the bottom panel area of VS Code
 
 ## Requirements
 
